@@ -29,12 +29,15 @@ class DatasetClient(Client):
         params = dict(
             hda_ldda=hda_ldda,
         )
-        return Client._get(self, id=dataset_id, deleted=deleted, params=params)
+        return Client._get(self, id=dataset_id, deleted=deleted, params=params).json()
     
-    def api_download_dataset(self, dataset_id, file_path=None, use_default_filename=True,
-                         wait_for_completion=False, maxwait=12000, hda_ldda='hda'):
+    def download_dataset(self, contener_id, dataset_id, file_path=None, use_default_filename=True,
+                         wait_for_completion=False, maxwait=12000, hda_ldda="hda"):
         """
         Downloads the dataset identified by 'id'.
+
+        :type history_id: string
+        :param container_id: Encoded history ID or Library ID
 
         :type dataset_id: string
         :param dataset_id: Encoded Dataset ID
@@ -68,6 +71,10 @@ class DatasetClient(Client):
         """
         if wait_for_completion:
             self._block_until_dataset_ready(dataset_id, maxwait=maxwait)
+            
+        if hda_ldda == 'hda':
+            
+        '''
 
         dataset = self.show_dataset(dataset_id)
         if not dataset['state'] == 'ok':
@@ -92,7 +99,7 @@ class DatasetClient(Client):
         except KeyError:
             pass
 
-        r = Client._get(self, url=url, returnr=True)
+        r = Client._get(self, url=url)
         if file_path is None:
             return r.content
         else:
@@ -114,78 +121,7 @@ class DatasetClient(Client):
                 file_local_path = file_path
             with open(file_local_path, 'wb') as fp:
                 fp.write(r.content)
-
-
-    def download_dataset(self, dataset_id, file_path=None, use_default_filename=True,
-                         wait_for_completion=False, maxwait=12000):
-        """
-        Downloads the dataset identified by 'id'.
-
-        :type dataset_id: string
-        :param dataset_id: Encoded Dataset ID
-
-        :type file_path: string
-        :param file_path: If the file_path argument is provided, the dataset will be streamed to disk
-                          at that path (Should not contain filename if use_default_name=True).
-                          If the file_path argument is not provided, the dataset content is loaded into memory
-                          and returned by the method (Memory consumption may be heavy as the entire file
-                          will be in memory).
-
-        :type use_default_name: boolean
-        :param use_default_name: If the use_default_name parameter is True, the exported
-                                 file will be saved as file_local_path/%s,
-                                 where %s is the dataset name.
-                                 If use_default_name is False, file_local_path is assumed to
-                                 contain the full file path including filename.
-
-        :type wait_for_completion: boolean
-        :param wait_for_completion: If wait_for_completion is True, this call will block until the dataset is ready.
-                                    If the dataset state becomes invalid, a DatasetStateException will be thrown.
-
-        :type maxwait: float
-        :param maxwait: Time (in seconds) to wait for dataset to complete.
-                        If the dataset state is not complete within this time, a DatasetTimeoutException will be thrown.
-
-        :rtype: dict
-        :return: If a file_path argument is not provided, returns a dict containing the file_content.
-                 Otherwise returns nothing.
-        """
-        if wait_for_completion:
-            self._block_until_dataset_ready(dataset_id, maxwait=maxwait)
-
-        dataset = self.show_dataset(dataset_id)
-        if not dataset['state'] == 'ok':
-            raise DatasetStateException("Dataset not ready. Dataset id: %s, current state: %s" % (dataset_id, dataset['state']))
-
-        # Currently the Datasets REST API does not provide the download URL, so we construct it
-        file_ext = dataset.get('file_ext', dataset['data_type'])
-        download_url = 'datasets/' + dataset_id + '/display?to_ext=' + file_ext
-        url = urlparse.urljoin(self.gi.base_url, download_url)
-
-        # Don't use self.gi.make_get_request as currently the download API does not require a key
-        r = requests.get(url)
-
-        if file_path is None:
-            return r.content
-        else:
-            if use_default_filename:
-                try:
-                    # First try to get the filename from the response headers
-                    # We expect tokens 'filename' '=' to be followed by the quoted filename
-                    tokens = [x for x in shlex.shlex(r.headers['content-disposition'], posix=True)]
-                    header_filepath = tokens[tokens.index('filename') + 2]
-                    filename = os.path.basename(header_filepath)
-                except (ValueError, IndexError):
-                    # If the filename was not in the header, build a useable filename ourselves.
-                    filename = dataset['name'] + '.' + file_ext
-
-                file_local_path = os.path.join(file_path, filename)
-            else:
-                file_local_path = file_path
-
-            with open(file_local_path, 'wb') as fp:
-                fp.write(r.content)
-
+        '''
     def _is_dataset_complete(self, dataset_id):
         dataset = self.show_dataset(dataset_id)
         state = dataset['state']

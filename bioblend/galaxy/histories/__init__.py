@@ -42,7 +42,7 @@ class HistoryClient(Client):
         """
         if history_id is not None and name is not None:
             raise ValueError('Provide only one argument between name or history_id, but not both')
-        histories = Client._get(self, deleted=deleted)
+        histories = Client._get(self, deleted=deleted).json()
         if history_id is not None:
             history = next((_ for _ in histories if _['id'] == history_id), None)
             histories = [history] if history is not None else []
@@ -69,7 +69,7 @@ class HistoryClient(Client):
                 params['visible'] = visible
             if types is not None:
                 params['types'] = types.join(",")
-        return Client._get(self, id=history_id, contents=contents, params=params)
+        return Client._get(self, id=history_id, contents=contents, params=params).json()
 
     def delete_dataset(self, history_id, dataset_id):
         """
@@ -97,7 +97,7 @@ class HistoryClient(Client):
         url = self.gi._make_url(self, history_id, contents=True)
         # Append the dataset_id to the base history contents URL
         url = '/'.join([url, dataset_id])
-        return Client._get(self, url=url)
+        return Client._get(self, url=url).json()
 
     def show_dataset_collection(self, history_id, dataset_collection_id):
         """
@@ -105,7 +105,7 @@ class HistoryClient(Client):
         """
         url = self.gi._make_url(self, history_id, contents=True)
         url = '/'.join([url, "dataset_collections", dataset_collection_id])
-        return Client._get(self, url=url)
+        return Client._get(self, url=url).json()
 
     def show_matching_datasets(self, history_id, name_filter=None):
         """
@@ -132,7 +132,7 @@ class HistoryClient(Client):
         """
         url = self.gi._make_url(self, history_id, contents=True)
         url = '/'.join([url, dataset_id, "provenance"])
-        return Client._get(self, url=url)
+        return Client._get(self, url=url).json()
 
     def update_history(self, history_id, name=None, annotation=None, **kwds):
         """
@@ -256,7 +256,7 @@ class HistoryClient(Client):
         )
         return Client._post(self, payload, id=history_id, contents=True)
 
-    def api_download_dataset(self, history_id, dataset_id, file_path=None, use_default_filename=True,
+    def download_dataset(self, history_id, dataset_id, file_path=None, use_default_filename=True,
                          wait_for_completion=False, maxwait=12000, hda_ldda='hda'):
         """
         Downloads the dataset identified by 'id'.
@@ -300,20 +300,15 @@ class HistoryClient(Client):
         dataset = self.show_dataset(history_id, dataset_id)
         if not dataset['state'] == 'ok':
             raise DatasetStateException("Dataset not ready. Dataset id: %s, current state: %s" % (dataset_id, dataset['state']))
-            
-        try:
-            params = dict(
-            hda_ldda=dataset['hda_ldda'],
-            )
-        except KeyError:    
-            params = dict(
-            hda_ldda=hda_ldda,
-            )
-            
+               
+        params = dict(
+        hda_ldda=hda_ldda,
+        )
+               
         url = self.gi._make_url(self, history_id, contents=True)
         url = '/'.join([url, dataset_id, 'display?to_ext=%s' % dataset['file_ext']])
 
-        r = Client._get(self, url=url, returnr=True)
+        r = Client._get(self, url=url)
         if file_path is None:
             return r.content
         else:
@@ -335,33 +330,6 @@ class HistoryClient(Client):
                 file_local_path = file_path
             with open(file_local_path, 'wb') as fp:
                 fp.write(r.content)
-
-    def download_dataset(self, history_id, dataset_id, file_path,
-                         use_default_filename=True, to_ext=None):
-        """
-        Download a ``dataset_id`` from history with ``history_id`` to a
-        file on the local file system, saving it to ``file_path``.
-        """
-        # TODO: Outsource to DatasetClient.download_dataset() to replace most of this.
-        meta = self.show_dataset(history_id, dataset_id)
-        d_type = to_ext
-        if d_type is None and 'file_ext' in meta:
-            d_type = meta['file_ext']
-        elif d_type is None and 'data_type' in meta:
-            d_type = meta['data_type']
-
-        # TODO: Download this via the REST API. api/datasets/<dataset_id>/display
-        download_url = 'datasets/' + meta['id'] + '/display?to_ext=' + d_type
-        url = urlparse.urljoin(self.gi.base_url, download_url)
-
-        req = urllib2.urlopen(url)
-        if use_default_filename:
-            file_local_path = os.path.join(file_path, meta['name'])
-        else:
-            file_local_path = file_path
-
-        with open(file_local_path, 'wb') as fp:
-            shutil.copyfileobj(req, fp)
 
     def delete_history(self, history_id, purge=False):
         """
@@ -418,7 +386,7 @@ class HistoryClient(Client):
         """
         url = self.gi._make_url(self, None)
         url = '/'.join([url, 'most_recently_used'])
-        return Client._get(self, url=url)
+        return Client._get(self, url=url).json()
 
     def export_history(self, history_id, gzip=True, include_hidden=False,
                        include_deleted=False, wait=False):

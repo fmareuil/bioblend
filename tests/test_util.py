@@ -1,12 +1,10 @@
 """ General support infrastructure not tied to any particular test.
 """
 import os
-
 import unittest
 if not hasattr(unittest, 'skip'):
     # Python < 2.7
     import unittest2 as unittest
-
 NO_CLOUDMAN_MESSAGE = "CloudMan required and no CloudMan AMI configured."
 NO_GALAXY_MESSAGE = "Externally configured Galaxy required, but not found. Set BIOBLEND_GALAXY_URL and BIOBLEND_GALAXY_API_KEY to run this test."
 MISSING_TOOL_MESSAGE = "Externally configured Galaxy instance requires tool %s to run test."
@@ -27,8 +25,11 @@ def skip_unless_galaxy():
     configured.
     """
     test = lambda f: f
+    envi = os.environ
+    envi['BIOBLEND_GALAXY_URL'] = 'http://127.0.0.1:8080/'
+    envi['BIOBLEND_GALAXY_API_KEY'] = '9885538522911aa137f77273d9fb4634'
     for prop in ['BIOBLEND_GALAXY_URL', 'BIOBLEND_GALAXY_API_KEY']:
-        if prop not in os.environ:
+        if prop not in envi:
             test = unittest.skip(NO_GALAXY_MESSAGE)
             break
 
