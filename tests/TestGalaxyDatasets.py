@@ -15,3 +15,7 @@ class TestGalaxyDatasets(GalaxyTestBase.GalaxyTestBase):
     def test_download_dataset(self):
         with self.assertRaises(Exception):
             dataset = self.gi.datasets.download_dataset(None)
+
+    def test_api_download_dataset(self):
+        with self.assertRaises(Exception):
+            dataset = self.gi.datasets.api_download_dataset(None)

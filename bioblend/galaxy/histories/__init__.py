@@ -10,6 +10,7 @@ import shutil
 import shlex
 import urlparse
 import urllib2
+import shlex
 import time
 
 
@@ -42,7 +43,7 @@ class HistoryClient(Client):
         """
         if history_id is not None and name is not None:
             raise ValueError('Provide only one argument between name or history_id, but not both')
-        histories = Client._get(self, deleted=deleted)
+        histories = Client._get(self, deleted=deleted).json()
         if history_id is not None:
             history = next((_ for _ in histories if _['id'] == history_id), None)
             histories = [history] if history is not None else []
@@ -69,7 +70,7 @@ class HistoryClient(Client):
                 params['visible'] = visible
             if types is not None:
                 params['types'] = types.join(",")
-        return Client._get(self, id=history_id, contents=contents, params=params)
+        return Client._get(self, id=history_id, contents=contents, params=params).json()
 
     def delete_dataset(self, history_id, dataset_id):
         """
@@ -97,7 +98,7 @@ class HistoryClient(Client):
         url = self.gi._make_url(self, history_id, contents=True)
         # Append the dataset_id to the base history contents URL
         url = '/'.join([url, dataset_id])
-        return Client._get(self, url=url)
+        return Client._get(self, url=url).json()
 
     def show_dataset_collection(self, history_id, dataset_collection_id):
         """
@@ -105,7 +106,7 @@ class HistoryClient(Client):
         """
         url = self.gi._make_url(self, history_id, contents=True)
         url = '/'.join([url, "dataset_collections", dataset_collection_id])
-        return Client._get(self, url=url)
+        return Client._get(self, url=url).json()
 
     def show_matching_datasets(self, history_id, name_filter=None):
         """
@@ -132,7 +133,7 @@ class HistoryClient(Client):
         """
         url = self.gi._make_url(self, history_id, contents=True)
         url = '/'.join([url, dataset_id, "provenance"])
-        return Client._get(self, url=url)
+        return Client._get(self, url=url).json()
 
     def update_history(self, history_id, name=None, annotation=None, **kwds):
         """
@@ -257,7 +258,7 @@ class HistoryClient(Client):
         return Client._post(self, payload, id=history_id, contents=True)
 
     def download_dataset(self, history_id, dataset_id, file_path=None, use_default_filename=True,
-                         wait_for_completion=False, maxwait=12000, chunk_size=1024, hda_ldda='hda'):
+                         wait_for_completion=False, maxwait=12000, hda_ldda='hda'):
         """
         Downloads the dataset identified by 'id'.
         
@@ -270,8 +271,9 @@ class HistoryClient(Client):
         :type file_path: string
         :param file_path: If the file_path argument is provided, the dataset will be streamed to disk
                           at that path (Should not contain filename if use_default_name=True).
-                          If the file_path argument is not provided, a generator is created. This avoids reading 
-                          the content at once into memory for large responses.
+                          If the file_path argument is not provided, the dataset content is loaded into memory
+                          and returned by the method (Memory consumption may be heavy as the entire file
+                          will be in memory).
 
         :type use_default_filename: boolean
         :param use_default_filename: If the use_default_filename parameter is True, the exported
@@ -283,9 +285,6 @@ class HistoryClient(Client):
         :type wait_for_completion: boolean
         :param wait_for_completion: If wait_for_completion is True, this call will block until the dataset is ready.
                                     If the dataset state becomes invalid, a DatasetStateException will be thrown.
-        
-        :type chunk_size: int
-        :param chunk_size: The chunk size is the number of bytes (1024 - the default) it should read into memory.
 
         :type maxwait: float
         :param maxwait: Time (in seconds) to wait for dataset to complete.
@@ -307,19 +306,12 @@ class HistoryClient(Client):
         hda_ldda=hda_ldda,
         )
                
-        try:
-            url = urlparse.urljoin(self.gi.base_url, dataset['download_url'])
-        except KeyError:
-            raise KeyError('download_url not found : Impossible to download this file')
+        url = self.gi._make_url(self, history_id, contents=True)
+        url = '/'.join([url, dataset_id, 'display?to_ext=%s' % dataset['file_ext']])
 
-        try:
-            url = url + '?to_ext=%s' % dataset['file_ext']
-        except KeyError:
-            pass
-
-        r = Client._raw_get(self, url=url)
+        r = Client._get(self, url=url)
         if file_path is None:
-            return r.iter_content(chunk_size)
+            return r.content
         else:
             if use_default_filename:
                 try:
@@ -337,13 +329,8 @@ class HistoryClient(Client):
                 file_local_path = os.path.join(file_path, filename)
             else:
                 file_local_path = file_path
-
             with open(file_local_path, 'wb') as fp:
-                for chunk in r.iter_content(chunk_size):
-                    if not chunk:
-                        break
-                        
-                    fp.write(chunk)
+                fp.write(r.content)
 
     def delete_history(self, history_id, purge=False):
         """
@@ -400,7 +387,7 @@ class HistoryClient(Client):
         """
         url = self.gi._make_url(self, None)
         url = '/'.join([url, 'most_recently_used'])
-        return Client._get(self, url=url)
+        return Client._get(self, url=url).json()
 
     def export_history(self, history_id, gzip=True, include_hidden=False,
                        include_deleted=False, wait=False):

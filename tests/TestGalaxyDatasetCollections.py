@@ -3,7 +3,6 @@ from bioblend.galaxy import dataset_collections as collections
 import GalaxyTestBase
 import test_util
 
-
 @test_util.skip_unless_galaxy()
 class TestGalaxyDatasetCollections(GalaxyTestBase.GalaxyTestBase):
 

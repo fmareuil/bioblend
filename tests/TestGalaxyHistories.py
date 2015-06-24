@@ -106,7 +106,7 @@ class TestGalaxyHistories(GalaxyTestBase.GalaxyTestBase):
             self.gi.histories.download_dataset(history_id, dataset1_id, file_path=f.name, use_default_filename=False)
             f.flush()
             assert open(f.name, "r").read() == "1\t2\t3\n"
-
+   
     def test_delete_history(self):
         result = self.gi.histories.delete_history(self.history['id'])
         self.assertTrue(result['deleted'])
