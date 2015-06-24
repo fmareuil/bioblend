@@ -40,29 +40,26 @@ class DatatypesClient(Client):
             params['upload_only'] = True
 
         return Client._get(self, params=params)
-    
+
     def get_edam_formats(self):
         """
-        Displays a collection (list) of sniffers.
+        Displays a collection (dict) of edam formats.
 
         :rtype: dict
         :return: A dict of  individual edam_format.
                  For example::
 
              {
-                "RData": "format_2333", 
-                "Roadmaps": "format_2561", 
-                "Sequences": "format_1929", 
-                "ab1": "format_2333", 
-                "acedb": "format_2330", 
-                "affybatch": "format_2331", 
-                "afg": "format_2561", 
-                "arff": "format_2330", 
-                "asn1": "format_2330", 
+                "RData": "format_2333",
+                "Roadmaps": "format_2561",
+                "Sequences": "format_1929",
+                "ab1": "format_2333",
+                "acedb": "format_2330",
+                "affybatch": "format_2331",
+                "afg": "format_2561",
+                "arff": "format_2330",
+                "asn1": "format_2330",
                 "asn1-binary": "format_2333"}
-
-
-
         """
 
         url = self.gi._make_url(self)

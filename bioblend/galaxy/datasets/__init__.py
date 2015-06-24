@@ -40,31 +40,37 @@ class DatasetClient(Client):
             hda_ldda=hda_ldda,
         )
         return Client._get(self, id=dataset_id, deleted=deleted, params=params)
-    
+
     def download_dataset(self, dataset_id, file_path=None, use_default_filename=True,
                          wait_for_completion=False, maxwait=12000):
         """
         Downloads the dataset identified by 'id'.
+
         :type dataset_id: str
         :param dataset_id: Encoded dataset ID
+
         :type file_path: str
         :param file_path: If the file_path argument is provided, the dataset will be streamed to disk
                           at that path (Should not contain filename if use_default_name=True).
                           If the file_path argument is not provided, the dataset content is loaded into memory
                           and returned by the method (Memory consumption may be heavy as the entire file
                           will be in memory).
+
         :type use_default_filename: bool
         :param use_default_filename: If the use_default_name parameter is True, the exported
                                  file will be saved as file_path/%s,
                                  where %s is the dataset name.
                                  If use_default_name is False, file_path is assumed to
                                  contain the full file path including filename.
+
         :type wait_for_completion: bool
         :param wait_for_completion: If wait_for_completion is True, this call will block until the dataset is ready.
                                     If the dataset state becomes invalid, a DatasetStateException will be thrown.
+
         :type maxwait: float
         :param maxwait: Time (in seconds) to wait for dataset to complete.
                         If the dataset state is not complete within this time, a DatasetTimeoutException will be thrown.
+
         :rtype: dict
         :return: If a file_path argument is not provided, returns a dict containing the file_content.
                  Otherwise returns nothing.
@@ -123,7 +129,7 @@ class DatasetClient(Client):
 
             # Return location file was saved to
             return file_local_path
-            
+
     def _is_dataset_complete(self, dataset_id):
         dataset = self.show_dataset(dataset_id)
         state = dataset['state']
