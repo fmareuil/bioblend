@@ -151,7 +151,7 @@ class Client(object):
         Perform a :meth:`_raw_get` and return the decoded JSON.
         """
         return self._raw_get(id=id, deleted=deleted, contents=contents,
-                             url=url, params=params).json()
+                             url=url, params=params)
 
     def _post(self, payload, id=None, deleted=False, contents=None, url=None, files_attached=False):
         """
