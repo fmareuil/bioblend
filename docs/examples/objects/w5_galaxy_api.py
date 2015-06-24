@@ -1,11 +1,16 @@
-import sys, os, json, urlparse
+from __future__ import print_function
+import json
+import os
+import sys
+
+from six.moves.urllib.parse import urljoin
 
 # This example, provided for comparison with w5_metagenomics.py,
 # contains the code required to run the metagenomics workflow
 # *without* BioBlend.
 
-URL = os.getenv('GALAXY_URL', 'http://orione.crs4.it')
-API_URL = urlparse.urljoin(URL, 'api')
+URL = os.getenv('GALAXY_URL', 'https://orione.crs4.it')
+API_URL = urljoin(URL, 'api')
 API_KEY = os.getenv('GALAXY_API_KEY', 'YOUR_API_KEY')
 if API_KEY == 'YOUR_API_KEY':
     sys.exit('API_KEY not set, see the README.txt file')
@@ -72,12 +77,12 @@ ws_parameters['db_opts']['database'] = '16SMicrobial-20131106'
 data = {
     'workflow_id': iw['id'],
     'parameters': {tool_id: {'db_opts': ws_parameters['db_opts']}},
-    }
+}
 assert len(iw_details['inputs']) == 1
 input_step_id = iw_details['inputs'].keys()[0]
-data['ds_map'] = {input_step_id: {'src': 'ld', 'id' : ld['id']}}
+data['ds_map'] = {input_step_id: {'src': 'ld', 'id': ld['id']}}
 data['history'] = history_name
 r_dict = common.post(API_KEY, '%s/workflows' % API_URL, data)
 
-print 'Running workflow: %s [%s]' % (iw['name'], iw['id'])
-print 'Output history: %s [%s]' % (history_name, r_dict['history'])
+print('Running workflow: %s [%s]' % (iw['name'], iw['id']))
+print('Output history: %s [%s]' % (history_name, r_dict['history']))

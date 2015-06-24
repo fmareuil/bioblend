@@ -7,13 +7,13 @@ import time
 import bioblend
 import bioblend.galaxy
 
-import client
+from . import client
 
 
 # dataset states corresponding to a 'pending' condition
 _PENDING_DS_STATES = set(
     ["new", "upload", "queued", "running", "setting_metadata"]
-    )
+)
 
 
 def _get_error_info(hda):
@@ -21,7 +21,7 @@ def _get_error_info(hda):
     try:
         msg += ' (%s): ' % hda.name
         msg += hda.wrapped['misc_info']
-    except StandardError:  # avoid 'error while generating an error report'
+    except Exception:  # avoid 'error while generating an error report'
         msg += ': error'
     return msg
 
@@ -96,8 +96,8 @@ class GalaxyInstance(object):
         :param polling_interval: polling interval in seconds
 
         :type break_on_error: bool
-        :param break_on_error: if :obj:`True`, break as soon as at least
-          one of the datasets is in the 'error' state.
+        :param break_on_error: if ``True``, raise a RuntimeError exception as
+          soon as at least one of the datasets is in the 'error' state.
 
         .. warning::
 
@@ -116,7 +116,7 @@ class GalaxyInstance(object):
                 if ds.state in _PENDING_DS_STATES:
                     pending.append(ds)
             return pending
-        #--
+
         self.log.info('waiting for datasets')
         while datasets:
             datasets = poll(datasets)

@@ -1,75 +1,83 @@
 # pylint: disable=C0103,E1101
-
-import sys, os, json, uuid, tempfile, tarfile, urllib2, shutil
-from test_util import unittest
+import json
+import os
+import shutil
 import socket
-socket.setdefaulttimeout(10.0)
+import sys
+import tarfile
+import tempfile
+import uuid
+
+from six.moves.urllib.request import urlopen
+from six.moves.urllib.error import URLError
+import six
 
 import bioblend
 bioblend.set_stream_logger('test', level='INFO')
 import bioblend.galaxy.objects.wrappers as wrappers
 import bioblend.galaxy.objects.galaxy_instance as galaxy_instance
 from bioblend.galaxy.client import ConnectionError
+from test_util import unittest
 import test_util
 
-
+socket.setdefaulttimeout(10.0)
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 SAMPLE_FN = os.path.join(THIS_DIR, 'data', 'paste_columns.ga')
 FOO_DATA = 'foo\nbar\n'
 FOO_DATA_2 = 'foo2\nbar2\n'
 SAMPLE_WF_DICT = {
-    u'deleted': False,
-    u'id': u'9005c5112febe774',
-    u'inputs': {
-        u'571': {u'label': u'Input Dataset', u'value': u''},
-        u'572': {u'label': u'Input Dataset', u'value': u''},
+    'deleted': False,
+    'id': '9005c5112febe774',
+    'inputs': {
+        '571': {'label': 'Input Dataset', 'value': ''},
+        '572': {'label': 'Input Dataset', 'value': ''},
+    },
+    'model_class': 'StoredWorkflow',
+    'name': 'paste_columns',
+    'published': False,
+    'steps': {
+        '571': {
+            'id': 571,
+            'input_steps': {},
+            'tool_id': None,
+            'tool_inputs': {'name': 'Input Dataset'},
+            'tool_version': None,
+            'type': 'data_input',
         },
-    u'model_class': u'StoredWorkflow',
-    u'name': u'paste_columns',
-    u'published': False,
-    u'steps': {
-        u'571': {
-            u'id': 571,
-            u'input_steps': {},
-            u'tool_id': None,
-            u'tool_inputs': {u'name': u'Input Dataset'},
-            u'tool_version': None,
-            u'type': u'data_input',
-            },
-        u'572': {
-            u'id': 572,
-            u'input_steps': {},
-            u'tool_id': None,
-            u'tool_inputs': {u'name': u'Input Dataset'},
-            u'tool_version': None,
-            u'type': u'data_input',
-            },
-        u'573': {
-            u'id': 573,
-            u'input_steps': {
-                u'input1': {u'source_step': 571, u'step_output': u'output'},
-                u'input2': {u'source_step': 572, u'step_output': u'output'},
-                },
-            u'tool_id': u'Paste1',
-            u'tool_inputs': {
-                u'delimiter': u'"T"',
-                u'input1': u'null',
-                u'input2': u'null',
-                },
-            u'tool_version': u'1.0.0',
-            u'type': u'tool',
-            }
+        '572': {
+            'id': 572,
+            'input_steps': {},
+            'tool_id': None,
+            'tool_inputs': {'name': 'Input Dataset'},
+            'tool_version': None,
+            'type': 'data_input',
         },
-    u'tags': [],
-    u'url': u'/api/workflows/9005c5112febe774',
-    }
+        '573': {
+            'id': 573,
+            'input_steps': {
+                'input1': {'source_step': 571, 'step_output': 'output'},
+                'input2': {'source_step': 572, 'step_output': 'output'},
+            },
+            'tool_id': 'Paste1',
+            'tool_inputs': {
+                'delimiter': '"T"',
+                'input1': 'null',
+                'input2': 'null',
+            },
+            'tool_version': '1.0.0',
+            'type': 'tool',
+        }
+    },
+    'tags': [],
+    'url': '/api/workflows/9005c5112febe774',
+}
 
 
 def is_reachable(url):
     res = None
     try:
-        res = urllib2.urlopen(url, timeout=1)
-    except urllib2.URLError:
+        res = urlopen(url, timeout=1)
+    except (URLError, socket.timeout):
         return False
     if res is not None:
         res.close()
@@ -104,7 +112,7 @@ class MockWrapper(wrappers.Wrapper):
 class TestWrapper(unittest.TestCase):
 
     def setUp(self):
-        self.d = {'a' : 1, 'b' : [2, 3], 'c': {'x': 4}}
+        self.d = {'a': 1, 'b': [2, 3], 'c': {'x': 4}}
         self.assertRaises(TypeError, wrappers.Wrapper, self.d)
         self.w = MockWrapper(self.d)
 
@@ -122,7 +130,7 @@ class TestWrapper(unittest.TestCase):
 
     def test_taint(self):
         self.assertFalse(self.w.is_modified)
-        self.w.a = 111
+        self.w.a = 111  # pylint: disable=W0201
         self.assertTrue(self.w.is_modified)
 
     def test_serialize(self):
@@ -138,7 +146,7 @@ class TestWrapper(unittest.TestCase):
     def test_kwargs(self):
         parent = MockWrapper({'a': 10})
         w = MockWrapper(self.d, parent=parent)
-        self.assertEqual(w.parent, parent)
+        self.assertIs(w.parent, parent)
         self.assertRaises(AttributeError, setattr, w, 'parent', 0)
 
 
@@ -154,37 +162,35 @@ class TestWorkflow(unittest.TestCase):
         self.assertEqual(self.wf.published, False)
         self.assertEqual(self.wf.tags, [])
         self.assertEqual(
-            self.wf.input_labels_to_ids, {'Input Dataset': set(['571', '572'])}
-            )
-        self.assertEqual(
-            self.wf.tool_labels_to_ids, {'Paste1': set(['573'])}
-            )
-        self.assertEqual(self.wf.input_ids, set(['571', '572']))
-        self.assertEqual(self.wf.output_ids, set(['573']))
+            self.wf.input_labels_to_ids, {'Input Dataset': set(['571', '572'])})
+        self.assertEqual(self.wf.tool_labels_to_ids, {'Paste1': set(['573'])})
+        self.assertEqual(self.wf.data_input_ids, set(['571', '572']))
+        self.assertEqual(self.wf.source_ids, set(['571', '572']))
+        self.assertEqual(self.wf.sink_ids, set(['573']))
 
     def test_dag(self):
         inv_dag = {}
-        for h, tails in self.wf.dag.iteritems():
+        for h, tails in six.iteritems(self.wf.dag):
             for t in tails:
                 inv_dag.setdefault(str(t), set()).add(h)
         self.assertEqual(self.wf.inv_dag, inv_dag)
         heads = set(self.wf.dag)
-        self.assertEqual(heads, set.union(*self.wf.inv_dag.itervalues()))
+        self.assertEqual(heads, set.union(*self.wf.inv_dag.values()))
         tails = set(self.wf.inv_dag)
-        self.assertEqual(tails, set.union(*self.wf.dag.itervalues()))
+        self.assertEqual(tails, set.union(*self.wf.dag.values()))
         ids = self.wf.sorted_step_ids()
         self.assertEqual(set(ids), heads | tails)
-        for h, tails in self.wf.dag.iteritems():
+        for h, tails in six.iteritems(self.wf.dag):
             for t in tails:
-                self.assertTrue(ids.index(h) < ids.index(t))
+                self.assertLess(ids.index(h), ids.index(t))
 
     def test_steps(self):
         steps = SAMPLE_WF_DICT['steps']
-        for sid, s in self.wf.steps.iteritems():
-            self.assertTrue(isinstance(s, wrappers.Step))
+        for sid, s in six.iteritems(self.wf.steps):
+            self.assertIsInstance(s, wrappers.Step)
             self.assertEqual(s.id, sid)
-            d = steps[sid]
-            self.assertTrue(s.parent is self.wf)
+            self.assertIn(sid, steps)
+            self.assertIs(s.parent, self.wf)
         self.assertEqual(self.wf.data_input_ids, set(['571', '572']))
         self.assertEqual(self.wf.tool_ids, set(['573']))
 
@@ -196,21 +202,21 @@ class TestWorkflow(unittest.TestCase):
     def test_input_map(self):
         class DummyLD(object):
             SRC = 'ld'
+
             def __init__(self, id_):
                 self.id = id_
         label = 'Input Dataset'
         self.assertEqual(self.wf.input_labels, set([label]))
         input_map = self.wf.convert_input_map(
-            {label: [DummyLD('a'), DummyLD('b')]}
-            )
+            {label: [DummyLD('a'), DummyLD('b')]})
         # {'571': {'id': 'a', 'src': 'ld'}, '572': {'id': 'b', 'src': 'ld'}}
         # OR
         # {'571': {'id': 'b', 'src': 'ld'}, '572': {'id': 'a', 'src': 'ld'}}
         self.assertEqual(set(input_map), set(['571', '572']))
-        for d in input_map.itervalues():
+        for d in six.itervalues(input_map):
             self.assertEqual(set(d), set(['id', 'src']))
             self.assertEqual(d['src'], 'ld')
-            self.assertTrue(d['id'] in 'ab')
+            self.assertIn(d['id'], 'ab')
 
 
 class GalaxyObjectsTestBase(unittest.TestCase):
@@ -220,6 +226,7 @@ class GalaxyObjectsTestBase(unittest.TestCase):
         galaxy_url = os.environ['BIOBLEND_GALAXY_URL']
         self.gi = galaxy_instance.GalaxyInstance(galaxy_url, galaxy_key)
 
+
 @test_util.skip_unless_galaxy()
 class TestGalaxyInstance(GalaxyObjectsTestBase):
 
@@ -227,15 +234,14 @@ class TestGalaxyInstance(GalaxyObjectsTestBase):
         name = 'test_%s' % uuid.uuid4().hex
         description, synopsis = 'D', 'S'
         lib = self.gi.libraries.create(
-            name, description=description, synopsis=synopsis
-            )
+            name, description=description, synopsis=synopsis)
         self.assertEqual(lib.name, name)
         self.assertEqual(lib.description, description)
         self.assertEqual(lib.synopsis, synopsis)
         self.assertEqual(len(lib.content_infos), 1)  # root folder
         self.assertEqual(len(lib.folder_ids), 1)
         self.assertEqual(len(lib.dataset_ids), 0)
-        self.assertTrue(lib.id in [_.id for _ in self.gi.libraries.list()])
+        self.assertIn(lib.id, [_.id for _ in self.gi.libraries.list()])
         lib.delete()
         self.assertFalse(lib.is_mapped)
 
@@ -243,7 +249,7 @@ class TestGalaxyInstance(GalaxyObjectsTestBase):
         name = 'test_%s' % uuid.uuid4().hex
         hist = self.gi.histories.create(name)
         self.assertEqual(hist.name, name)
-        self.assertTrue(hist.id in [_.id for _ in self.gi.histories.list()])
+        self.assertIn(hist.id, [_.id for _ in self.gi.histories.list()])
         hist.delete(purge=True)
         self.assertFalse(hist.is_mapped)
 
@@ -262,7 +268,7 @@ class TestGalaxyInstance(GalaxyObjectsTestBase):
             wf_dump = json.load(f)
             wf_info = self.gi.gi.workflows.import_workflow_json(wf_dump)
             wf_dict = self.gi.gi.workflows.show_workflow(wf_info['id'])
-            for id_, step in wf_dict['steps'].iteritems():
+            for id_, step in six.iteritems(wf_dict['steps']):
                 if step['type'] == 'tool':
                     for k in 'tool_inputs', 'tool_version':
                         wf_dict['steps'][id_][k] = None
@@ -284,7 +290,7 @@ class TestGalaxyInstance(GalaxyObjectsTestBase):
         self.assertTrue(wf.name.startswith('paste_columns'))
         self.assertEqual(len(wf.steps), 3)
         wf_ids = set(_.id for _ in self.gi.workflows.list())
-        self.assertTrue(wf.id in wf_ids)
+        self.assertIn(wf.id, wf_ids)
         wf.delete()
 
     # not very accurate:
@@ -293,17 +299,16 @@ class TestGalaxyInstance(GalaxyObjectsTestBase):
     def test_workflow_from_shared(self):
         all_prevs = dict(
             (_.id, _) for _ in self.gi.workflows.get_previews(published=True)
-            )
+        )
         pub_only_ids = set(all_prevs).difference(
-            _.id for _ in self.gi.workflows.get_previews()
-            )
+            _.id for _ in self.gi.workflows.get_previews())
         if pub_only_ids:
             wf_id = pub_only_ids.pop()
             imported = self.gi.workflows.import_shared(wf_id)
-            self.assertTrue(isinstance(imported, wrappers.Workflow))
+            self.assertIsInstance(imported, wrappers.Workflow)
             imported.delete()
         else:
-            print "skipped 'manually publish a workflow to run this test'"
+            self.skipTest('no published workflows, manually publish a workflow to run this test')
 
     def test_get_libraries(self):
         self.__test_multi_get('library')
@@ -338,21 +343,20 @@ class TestGalaxyInstance(GalaxyObjectsTestBase):
 
     def __test_multi_get(self, obj_type):
         create, get_objs, get_prevs, del_kwargs = self.__normalized_functions(
-            obj_type
-            )
+            obj_type)
         ids = lambda seq: set(_.id for _ in seq)
-        names = ['test_%s' % uuid.uuid4().hex for _ in xrange(2)]
+        names = ['test_%s' % uuid.uuid4().hex for _ in range(2)]
         objs = []
         try:
             objs = [create(_) for _ in names]
-            self.assertTrue(ids(objs) <= ids(get_objs()))
+            self.assertLessEqual(ids(objs), ids(get_objs()))
             if obj_type != 'workflow':
                 filtered = get_objs(name=names[0])
                 self.assertEqual(len(filtered), 1)
                 self.assertEqual(filtered[0].id, objs[0].id)
                 del_id = objs[-1].id
                 objs.pop().delete(**del_kwargs)
-                self.assertTrue(del_id in ids(get_prevs(deleted=True)))
+                self.assertIn(del_id, ids(get_prevs(deleted=True)))
             else:
                 # Galaxy appends info strings to imported workflow names
                 prev = get_prevs()[0]
@@ -374,10 +378,9 @@ class TestGalaxyInstance(GalaxyObjectsTestBase):
 
     def __test_delete_by_name(self, obj_type):
         create, _, get_prevs, del_kwargs = self.__normalized_functions(
-            obj_type
-            )
+            obj_type)
         name = 'test_%s' % uuid.uuid4().hex
-        objs = [create(name) for _ in xrange(2)]
+        objs = [create(name) for _ in range(2)]  # noqa
         final_name = objs[0].name
         prevs = [_ for _ in get_prevs(name=final_name) if not _.deleted]
         self.assertEqual(len(prevs), len(objs))
@@ -400,22 +403,28 @@ class TestLibrary(GalaxyObjectsTestBase):
     def tearDown(self):
         self.lib.delete()
 
+    def test_root_folder(self):
+        r = self.lib.root_folder
+        self.assertIsNone(r.parent)
+
     def test_folder(self):
         name, desc = 'test_%s' % uuid.uuid4().hex, 'D'
         folder = self.lib.create_folder(name, description=desc)
         self.assertEqual(folder.name, name)
         self.assertEqual(folder.description, desc)
-        self.assertEqual(folder.container_id, self.lib.id)
+        self.assertIs(folder.container, self.lib)
+        self.assertEqual(folder.parent.id, self.lib.root_folder.id)
         self.assertEqual(len(self.lib.content_infos), 2)
         self.assertEqual(len(self.lib.folder_ids), 2)
-        self.assertEqual(len(self.lib.dataset_ids), 0)
-        self.assertTrue(folder.id in self.lib.folder_ids)
+        self.assertIn(folder.id, self.lib.folder_ids)
+        retrieved = self.lib.get_folder(folder.id)
+        self.assertEqual(folder.id, retrieved.id)
 
     def __check_datasets(self, dss):
         self.assertEqual(len(dss), len(self.lib.dataset_ids))
         self.assertEqual(set(_.id for _ in dss), set(self.lib.dataset_ids))
         for ds in dss:
-            self.assertTrue(ds.container is self.lib)
+            self.assertIs(ds.container, self.lib)
 
     def test_dataset(self):
         folder = self.lib.create_folder('test_%s' % uuid.uuid4().hex)
@@ -429,24 +438,32 @@ class TestLibrary(GalaxyObjectsTestBase):
             ds = self.lib.upload_from_url(self.DS_URL)
             self.__check_datasets([ds])
         else:
-            print "skipped 'url not reachable'"
+            self.skipTest('%s not reachable' % self.DS_URL)
 
     def test_dataset_from_local(self):
-        with tempfile.NamedTemporaryFile(prefix='bioblend_test_') as f:
+        with tempfile.NamedTemporaryFile(mode='w', prefix='bioblend_test_') as f:
             f.write(FOO_DATA)
             f.flush()
             ds = self.lib.upload_from_local(f.name)
         self.__check_datasets([ds])
 
     def test_datasets_from_fs(self):
-        bnames = ['f%d.txt' % i for i in xrange(2)]
+        bnames = ['f%d.txt' % i for i in range(2)]
         dss, fnames = upload_from_fs(self.lib, bnames)
         self.__check_datasets(dss)
         dss, fnames = upload_from_fs(
-            self.lib, bnames, link_data_only='link_to_files'
-            )
+            self.lib, bnames, link_data_only='link_to_files')
         for ds, fn in zip(dss, fnames):
             self.assertEqual(ds.file_name, fn)
+
+    def test_copy_from_dataset(self):
+        hist = self.gi.histories.create('test_%s' % uuid.uuid4().hex)
+        try:
+            hda = hist.paste_content(FOO_DATA)
+            ds = self.lib.copy_from_dataset(hda)
+        finally:
+            hist.delete(purge=True)
+        self.__check_datasets([ds])
 
     def test_get_dataset(self):
         ds = self.lib.upload_data(FOO_DATA)
@@ -454,7 +471,7 @@ class TestLibrary(GalaxyObjectsTestBase):
         self.assertEqual(ds.id, retrieved.id)
 
     def test_get_datasets(self):
-        bnames = ['f%d.txt' % _ for _ in xrange(2)]
+        bnames = ['f%d.txt' % _ for _ in range(2)]
         dss, _ = upload_from_fs(self.lib, bnames)
         retrieved = self.lib.get_datasets()
         self.assertEqual(len(dss), len(retrieved))
@@ -477,28 +494,32 @@ class TestLDContents(GalaxyObjectsTestBase):
     def tearDown(self):
         self.lib.delete()
 
+    @test_util.skip_unless_galaxy('release_14.08')
     def test_dataset_get_stream(self):
         for idx, c in enumerate(self.ds.get_stream(chunk_size=1)):
-            self.assertEqual(str(FOO_DATA[idx]), c)
+            self.assertEqual(six.b(FOO_DATA[idx]), c)
 
+    @test_util.skip_unless_galaxy('release_14.08')
     def test_dataset_peek(self):
         fetched_data = self.ds.peek(chunk_size=4)
-        self.assertEqual(FOO_DATA[0:4], fetched_data)
+        self.assertEqual(six.b(FOO_DATA[0:4]), fetched_data)
 
+    @test_util.skip_unless_galaxy('release_14.08')
     def test_dataset_download(self):
         with tempfile.TemporaryFile() as f:
             self.ds.download(f)
             f.seek(0)
-            self.assertEqual(FOO_DATA, f.read())
+            self.assertEqual(six.b(FOO_DATA), f.read())
 
+    @test_util.skip_unless_galaxy('release_14.08')
     def test_dataset_get_contents(self):
-        self.assertEqual(FOO_DATA, self.ds.get_contents())
+        self.assertEqual(six.b(FOO_DATA), self.ds.get_contents())
 
     def test_dataset_delete(self):
         self.ds.delete()
-        # cannot test this yet because the 'deleted' attribute is not
-        # exported by the API at the moment
-        #self.assertTrue(self.ds.deleted)
+        # Cannot test this yet because the 'deleted' attribute is not exported
+        # by the API at the moment
+        # self.assertTrue(self.ds.deleted)
 
 
 @test_util.skip_unless_galaxy()
@@ -507,11 +528,9 @@ class TestHistory(GalaxyObjectsTestBase):
     def setUp(self):
         super(TestHistory, self).setUp()
         self.hist = self.gi.histories.create('test_%s' % uuid.uuid4().hex)
-        self.lib = self.gi.libraries.create('test_%s' % uuid.uuid4().hex)
 
     def tearDown(self):
         self.hist.delete(purge=True)
-        self.lib.delete()
 
     def test_delete(self):
         hist = self.gi.histories.create('test_%s' % uuid.uuid4().hex)
@@ -520,29 +539,47 @@ class TestHistory(GalaxyObjectsTestBase):
         self.assertFalse(hist.is_mapped)
         try:
             h = self.gi.histories.get(hist_id)
-            self.fail("Expected ConnectionError but GET returned %s" % str(h))
+            self.assertTrue(h.deleted)
         except ConnectionError:
+            # Galaxy up to release_2015.01.13 gives a ConnectionError
             pass
 
-    def test_import_dataset(self):
-        lds = self.lib.upload_data(FOO_DATA)
-        self.assertEqual(len(self.hist.dataset_ids), 0)
-        hda = self.hist.import_dataset(lds)
-        self.assertTrue(isinstance(hda, wrappers.HistoryDatasetAssociation))
-        self.assertTrue(hda.container is self.hist)
+    def __check_dataset(self, hda):
+        self.assertIsInstance(hda, wrappers.HistoryDatasetAssociation)
+        self.assertIs(hda.container, self.hist)
         self.assertEqual(len(self.hist.dataset_ids), 1)
         self.assertEqual(self.hist.dataset_ids[0], hda.id)
 
-    def test_get_dataset(self):
-        lds = self.lib.upload_data(FOO_DATA)
+    def test_import_dataset(self):
+        lib = self.gi.libraries.create('test_%s' % uuid.uuid4().hex)
+        lds = lib.upload_data(FOO_DATA)
+        self.assertEqual(len(self.hist.dataset_ids), 0)
         hda = self.hist.import_dataset(lds)
+        lib.delete()
+        self.__check_dataset(hda)
+
+    def test_upload_file(self):
+        with tempfile.NamedTemporaryFile(mode='w', prefix='bioblend_test_') as f:
+            f.write(FOO_DATA)
+            f.flush()
+            hda = self.hist.upload_file(f.name)
+        self.__check_dataset(hda)
+
+    def test_paste_content(self):
+        hda = self.hist.paste_content(FOO_DATA)
+        self.__check_dataset(hda)
+
+    def test_get_dataset(self):
+        hda = self.hist.paste_content(FOO_DATA)
         retrieved = self.hist.get_dataset(hda.id)
         self.assertEqual(hda.id, retrieved.id)
 
     def test_get_datasets(self):
-        bnames = ['f%d.txt' % _ for _ in xrange(2)]
-        lds, _ = upload_from_fs(self.lib, bnames)
+        bnames = ['f%d.txt' % _ for _ in range(2)]
+        lib = self.gi.libraries.create('test_%s' % uuid.uuid4().hex)
+        lds = upload_from_fs(lib, bnames)[0]
         hdas = [self.hist.import_dataset(_) for _ in lds]
+        lib.delete()
         retrieved = self.hist.get_datasets()
         self.assertEqual(len(hdas), len(retrieved))
         self.assertEqual(set(_.id for _ in hdas), set(_.id for _ in retrieved))
@@ -556,7 +593,7 @@ class TestHistory(GalaxyObjectsTestBase):
         tempdir = tempfile.mkdtemp(prefix='bioblend_test_')
         temp_fn = os.path.join(tempdir, 'export.tar.gz')
         try:
-            with open(temp_fn, 'w') as fo:
+            with open(temp_fn, 'wb') as fo:
                 self.hist.download(jeha_id, fo)
             self.assertTrue(tarfile.is_tarfile(temp_fn))
         finally:
@@ -579,32 +616,29 @@ class TestHDAContents(GalaxyObjectsTestBase):
     def setUp(self):
         super(TestHDAContents, self).setUp()
         self.hist = self.gi.histories.create('test_%s' % uuid.uuid4().hex)
-        self.lib = self.gi.libraries.create('test_%s' % uuid.uuid4().hex)
-        ld = self.lib.upload_data(FOO_DATA)
-        self.ds = self.hist.import_dataset(ld)
+        self.ds = self.hist.paste_content(FOO_DATA)
         self.ds.wait()
 
     def tearDown(self):
         self.hist.delete(purge=True)
-        self.lib.delete()
 
     def test_dataset_get_stream(self):
         for idx, c in enumerate(self.ds.get_stream(chunk_size=1)):
-            self.assertEqual(str(FOO_DATA[idx]), c)
+            self.assertEqual(six.b(FOO_DATA[idx]), c)
 
     def test_dataset_peek(self):
         fetched_data = self.ds.peek(chunk_size=4)
-        self.assertEqual(FOO_DATA[0:4], fetched_data)
+        self.assertEqual(six.b(FOO_DATA[0:4]), fetched_data)
 
     def test_dataset_download(self):
         with tempfile.TemporaryFile() as f:
             self.ds.download(f)
             f.seek(0)
             data = f.read()
-            self.assertEqual(FOO_DATA, data)
+            self.assertEqual(six.b(FOO_DATA), data)
 
     def test_dataset_get_contents(self):
-        self.assertEqual(FOO_DATA, self.ds.get_contents())
+        self.assertEqual(six.b(FOO_DATA), self.ds.get_contents())
 
     def test_dataset_delete(self):
         self.ds.delete()
@@ -627,11 +661,6 @@ class TestRunWorkflow(GalaxyObjectsTestBase):
         self.wf.delete()
         self.lib.delete()
 
-    def __check_res(self, res, sep):
-        exp_rows = zip(*(_.splitlines() for _ in self.contents))
-        exp_res = "\n".join(sep.join(t) for t in exp_rows)
-        self.assertEqual(res.strip(), exp_res)
-
     def __test(self, existing_hist=False, params=False):
         if existing_hist:
             hist = self.gi.histories.create(self.hist_name)
@@ -646,13 +675,14 @@ class TestRunWorkflow(GalaxyObjectsTestBase):
         input_map = {'Input 1': self.inputs[0], 'Input 2': self.inputs[1]}
         sys.stderr.write(os.linesep)
         outputs, out_hist = self.wf.run(
-            input_map, hist, params=params, wait=True, polling_interval=1
-            )
+            input_map, hist, params=params, wait=True, polling_interval=1)
         self.assertEqual(len(outputs), 1)
         out_ds = outputs[0]
-        self.assertTrue(out_ds.id in out_hist.dataset_ids)
+        self.assertIn(out_ds.id, out_hist.dataset_ids)
         res = out_ds.get_contents()
-        self.__check_res(res, sep)
+        exp_rows = zip(*(_.splitlines() for _ in self.contents))
+        exp_res = six.b("\n".join(sep.join(t) for t in exp_rows) + "\n")
+        self.assertEqual(res, exp_res)
         if existing_hist:
             self.assertEqual(out_hist.id, hist.id)
         out_hist.delete(purge=True)
@@ -680,7 +710,7 @@ def suite():
         TestHistory,
         TestHDAContents,
         TestRunWorkflow,
-        )])
+    )])
     return s
 
 

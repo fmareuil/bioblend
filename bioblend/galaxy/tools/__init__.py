@@ -3,6 +3,7 @@ Contains possible interaction dealing with Galaxy tools.
 
 """
 from bioblend.galaxy.client import Client
+from bioblend.util import attach_file
 from os.path import basename
 from json import dumps
 
@@ -59,7 +60,7 @@ class ToolClient(Client):
         params = {}
         params['in_panel'] = in_panel
         params['trackster'] = trackster
-        return Client._get(self, params=params).json()
+        return Client._get(self, params=params)
 
     def show_tool(self, tool_id, io_details=False, link_details=False):
         """
@@ -68,21 +69,27 @@ class ToolClient(Client):
         :type tool_id: str
         :param tool_id: id of the requested tool
 
-        :type io_details: boolean
+        :type io_details: bool
         :param io_details: if True, get also input and output details
 
-        :type link_details: boolean
+        :type link_details: bool
         :param link_details: if True, get also link details
         """
         params = {}
         params['io_details'] = io_details
         params['link_details'] = link_details
-        return Client._get(self, id=tool_id, params=params).json()
+        return Client._get(self, id=tool_id, params=params)
 
     def run_tool(self, history_id, tool_id, tool_inputs):
         """
         Runs tool specified by ``tool_id`` in history indicated
         by ``history_id`` with inputs from ``dict`` ``tool_inputs``.
+
+        :type history_id: str
+        :param history_id: encoded ID of the history in which to run the tool
+
+        :type tool_id: str
+        :param tool_id: ID of the tool to be run
 
         :type tool_inputs: dict
         :param tool_inputs: dictionary of input datasets and parameters
@@ -116,8 +123,7 @@ class ToolClient(Client):
         :param file_name: (optional) name of the new history dataset
 
         :type file_type: str
-        :param file_type: (optional) Galaxy datatype for the new dataset,
-          default is auto
+        :param file_type: Galaxy datatype for the new dataset, default is auto
 
         :type dbkey: str
         :param dbkey: (optional) genome dbkey
@@ -126,8 +132,11 @@ class ToolClient(Client):
         if "file_name" not in keywords:
             keywords["file_name"] = default_file_name
         payload = self._upload_payload(history_id, **keywords)
-        payload["files_0|file_data"] = open(path, "rb")
-        return self._tool_post(payload, files_attached=True)
+        payload["files_0|file_data"] = attach_file(path, name=keywords["file_name"])
+        try:
+            return self._tool_post(payload, files_attached=True)
+        finally:
+            payload["files_0|file_data"].close()
 
     def paste_content(self, content, history_id, **kwds):
         """
@@ -135,12 +144,13 @@ class ToolClient(Client):
         ``history_id``.
 
         :type content: str
-        :param content: content of the new dataset to upload
+        :param content: content of the new dataset to upload or a list of URLs
+          (one per line) to upload
 
         :type history_id: str
         :param history_id: id of the history where to upload the content
 
-        See :meth:`upload_file` for the optional parameters.
+        See :meth:`upload_file` for the optional parameters (except file_name).
         """
         payload = self._upload_payload(history_id, **kwds)
         payload["files_0|url_paste"] = content

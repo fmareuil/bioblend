@@ -11,6 +11,7 @@ from test_util import unittest
 from mock import MagicMock
 from bioblend import cloudman
 
+
 class TestCloudmanMock(unittest.TestCase):
 
     def setUp(self):
@@ -33,7 +34,7 @@ class TestCloudmanMock(unittest.TestCase):
 
         status = self.cm.get_status()
         self.assertNotEqual(status, None)
-        self.assertEquals(status, {})
+        self.assertEqual(status, {})
 
         # Check that the correct URL was called
         self.cm._make_get_request.assert_called_with("instance_state_json")
@@ -43,7 +44,7 @@ class TestCloudmanMock(unittest.TestCase):
         self.cm._make_get_request = MagicMock(return_value={'instances': []})
 
         nodes = self.cm.get_nodes()
-        self.assertNotEqual(nodes, None)
+        self.assertIsNotNone(nodes)
         self.assertEqual(len(nodes), 0)
 
         # Check that the correct URL was called
@@ -53,7 +54,7 @@ class TestCloudmanMock(unittest.TestCase):
         self.cm._make_get_request = MagicMock(return_value="{}")
         num_nodes = 10
         status = self.cm.add_nodes(num_nodes)
-        self.assertNotEqual(status, None)
+        self.assertIsNotNone(status)
 
         # Check that the correct URL was called
         params = {'number_nodes': 10, 'instance_type': '', 'spot_price': ''}
@@ -63,7 +64,7 @@ class TestCloudmanMock(unittest.TestCase):
         self.cm._make_get_request = MagicMock(return_value="{}")
         num_nodes = 10
         status = self.cm.remove_nodes(num_nodes, force=True)
-        self.assertNotEqual(status, None)
+        self.assertIsNotNone(status)
 
         # Check that the correct URL was called
         params = {'number_nodes': 10, 'force_termination': True}

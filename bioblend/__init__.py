@@ -1,15 +1,16 @@
-import os
 import logging
+import os
+
 from bioblend.config import Config, BioBlendConfigLocations
 
 # Current version of the library
-__version__ = '0.5.3-dev'
+__version__ = '0.5.4-dev'
 
 # default chunk size (in bytes) for reading remote data
 try:
     import resource
     CHUNK_SIZE = resource.getpagesize()
-except StandardError:
+except Exception:
     CHUNK_SIZE = 4096
 
 
@@ -27,9 +28,9 @@ def init_logging():
     """
     Initialize BioBlend's logging from a configuration file.
     """
-    for file in BioBlendConfigLocations:
+    for config_file in BioBlendConfigLocations:
         try:
-            logging.config.fileConfig(os.path.expanduser(file))
+            logging.config.fileConfig(os.path.expanduser(config_file))
         except:
             pass
 

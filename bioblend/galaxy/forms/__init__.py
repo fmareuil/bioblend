@@ -29,13 +29,13 @@ class FormsClient(Client):
 
 
         """
-        return Client._get(self).json()
+        return Client._get(self)
 
     def show_form(self, form_id):
         """
         Display information on a single form
 
-        :type form_id: string
+        :type form_id: str
         :param form_id: Encoded form ID
 
         :rtype: dict
@@ -54,16 +54,16 @@ class FormsClient(Client):
 
         """
 
-        return Client._get(self, id=form_id).json()
+        return Client._get(self, id=form_id)
 
     def create_form(self, form_xml_text):
         """
         Create a new form
 
-        :type   form_xml_text: string
+        :type   form_xml_text: str
         :param  form_xml_text: Form xml to create a form on galaxy instance
 
-        :rtype:     string
+        :rtype:     str
         :returns:   Unique url of newly created form with encoded id
 
         """

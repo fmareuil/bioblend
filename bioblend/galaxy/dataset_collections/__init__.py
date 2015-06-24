@@ -1,12 +1,14 @@
+import six
+
+
 class HasElements(object):
 
     def __init__(self, name, type="list", elements=[]):
         self.name = name
         self.type = type
         if isinstance(elements, dict):
-            self.elements = []
-            for key, value in elements.itervalues():
-                self.elements.append(dict(name=key, id=value, src="hda"))
+            self.elements = [dict(name=key, id=value, src="hda")
+                             for key, value in six.itervalues(elements)]
         elif elements:
             self.elements = elements
 
@@ -21,7 +23,7 @@ class CollectionDescription(HasElements):
         return dict(
             name=self.name,
             collection_type=self.type,
-            element_identifiers=map(lambda e: e.to_dict(), self.elements)
+            element_identifiers=[e.to_dict() for e in self.elements]
         )
 
 
@@ -32,7 +34,7 @@ class CollectionElement(HasElements):
             src="new_collection",
             name=self.name,
             collection_type=self.type,
-            element_identifiers=map(lambda e: e.to_dict(), self.elements)
+            element_identifiers=[e.to_dict() for e in self.elements]
         )
 
 

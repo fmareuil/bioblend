@@ -4,10 +4,14 @@ Clients for interacting with specific Galaxy entity types.
 Classes in this module should not be instantiated directly, but used
 via their handles in :class:`~.galaxy_instance.GalaxyInstance`.
 """
-import collections, json, abc
+import abc
+import collections
+import json
+
+import six
 
 import bioblend
-import wrappers
+from . import wrappers
 
 
 class ObjClient(object):
@@ -35,10 +39,10 @@ class ObjClient(object):
         Optional boolean kwargs for specific object types:
 
         ``deleted`` (libraries and histories)
-          if :obj:`True`, return only deleted objects
+          if ``True``, return only deleted objects
 
         ``published`` (workflows)
-          if :obj:`True`, return published workflows
+          if ``True``, return published workflows
 
         :rtype: list of :class:`~.wrappers.Preview`
         """
@@ -57,7 +61,6 @@ class ObjClient(object):
         else:
             return [id_]
 
-    #-- helpers --
     def _error(self, msg, err_type=RuntimeError):
         self.log.error(msg)
         raise err_type(msg)
@@ -100,9 +103,6 @@ class ObjLibraryClient(ObjDatasetClient):
         """
         Create a data library with the properties defined in the arguments.
 
-        Requires ``allow_library_path_paste = True`` to be set in
-        Galaxy's configuration file ``universe_wsgi.ini``.
-
         :rtype: :class:`~.wrappers.Library`
         :return: the library just created
         """
@@ -123,17 +123,25 @@ class ObjLibraryClient(ObjDatasetClient):
         dicts = self.gi.libraries.get_libraries(name=name, deleted=deleted)
         return [wrappers.LibraryPreview(_, gi=self.obj_gi) for _ in dicts]
 
-    def list(self, name=None):
+    def list(self, name=None, deleted=False):
         """
         Get libraries owned by the user of this Galaxy instance.
 
         :type name: str
         :param name: return only libraries with this name
+        :type deleted: bool
+        :param deleted: if ``True``, return libraries that have been deleted
 
         :rtype: list of :class:`~.wrappers.Library`
         """
-        dicts = self.gi.libraries.get_libraries(name=name)
-        return [self.get(_['id']) for _ in dicts if not _['deleted']]
+        dicts = self.gi.libraries.get_libraries(name=name, deleted=deleted)
+        if not deleted:
+            # return Library objects only for not-deleted libraries since Galaxy
+            # does not filter them out and Galaxy release_14.08 and earlier
+            # crashes when trying to get a deleted library
+            return [self.get(_['id']) for _ in dicts if not _['deleted']]
+        else:
+            return [self.get(_['id']) for _ in dicts]
 
     def delete(self, id_=None, name=None):
         """
@@ -183,16 +191,18 @@ class ObjHistoryClient(ObjDatasetClient):
         dicts = self.gi.histories.get_histories(name=name, deleted=deleted)
         return [wrappers.HistoryPreview(_, gi=self.obj_gi) for _ in dicts]
 
-    def list(self, name=None):
+    def list(self, name=None, deleted=False):
         """
         Get histories owned by the user of this Galaxy instance.
 
         :type name: str
         :param name: return only histories with this name
+        :type deleted: bool
+        :param deleted: if ``True``, return histories that have been deleted
 
         :rtype: list of :class:`~.wrappers.History`
         """
-        dicts = self.gi.histories.get_histories(name=name)
+        dicts = self.gi.histories.get_histories(name=name, deleted=deleted)
         return [self.get(_['id']) for _ in dicts]
 
     def delete(self, id_=None, name=None, purge=False):
@@ -202,9 +212,12 @@ class ObjHistoryClient(ObjDatasetClient):
         Note that the same name can map to multiple histories.
 
         :type purge: bool
-        :param purge: if :obj:`True`, also purge the history (requires
-          ``allow_user_dataset_purge = True`` to be set in Galaxy's
-          configuration file ``universe_wsgi.ini``)
+        :param purge: if ``True``, also purge (permanently delete) the history
+
+        .. note::
+          For the purge option to work, the Galaxy instance must have the
+          ``allow_user_dataset_purge`` option set to ``True`` in the
+          ``config/galaxy.ini`` configuration file.
         """
         for id_ in self._select_ids(id_=id_, name=name):
             res = self.gi.histories.delete_history(id_, purge=purge)
@@ -268,25 +281,25 @@ class ObjWorkflowClient(ObjClient):
 
     # the 'deleted' option is not available for workflows
     def get_previews(self, name=None, published=False):
-        dicts = self.gi.workflows.get_workflows(
-            name=name, published=published
-            )
+        dicts = self.gi.workflows.get_workflows(name=name, published=published)
         return [wrappers.WorkflowPreview(_, gi=self.obj_gi) for _ in dicts]
 
+    # the 'deleted' option is not available for workflows
     def list(self, name=None, deleted=False, published=False):
         """
         Get workflows owned by the user of this Galaxy instance.
 
         :type name: str
         :param name: return only workflows with this name
+        :type deleted: bool
+        :param deleted: this parameter is deprecated and ignored, it will be
+          removed in BioBlend 0.6
         :type published: bool
-        :param published: return published workflows
+        :param published: if ``True``, return also published workflows
 
         :rtype: list of :class:`~.wrappers.Workflow`
         """
-        dicts = self.gi.workflows.get_workflows(
-            name=name, deleted=deleted, published=published
-            )
+        dicts = self.gi.workflows.get_workflows(name=name, published=published)
         return [self.get(_['id']) for _ in dicts]
 
     def delete(self, id_=None, name=None):
@@ -301,7 +314,7 @@ class ObjWorkflowClient(ObjClient):
         """
         for id_ in self._select_ids(id_=id_, name=name):
             res = self.gi.workflows.delete_workflow(id_)
-            if not isinstance(res, basestring):
+            if not isinstance(res, six.string_types):
                 self._error('delete_workflow: unexpected reply: %r' % (res,))
 
 
@@ -353,5 +366,13 @@ class ObjToolClient(ObjClient):
 
         :rtype: list of :class:`~.wrappers.Tool`
         """
-        dicts = self.gi.tools.get_tools(name=name, trackster=trackster)
-        return [self.get(_['id']) for _ in dicts]
+        # dicts = self.gi.tools.get_tools(name=name, trackster=trackster)
+        # return [self.get(_['id']) for _ in dicts]
+        # As of 2015/04/15, GET /api/tools returns also data manager tools for
+        # non-admin users, see
+        # https://trello.com/c/jyl0cvFP/2633-api-tool-list-filtering-doesn-t-filter-data-managers-for-non-admins
+        # Trying to get() a data manager tool would then return a 404 Not Found
+        # error.
+        # Moreover, the dicts returned by gi.tools.get_tools() are richer than
+        # those returned by get(), so make this an alias for get_previews().
+        return self.get_previews(name, trackster)

@@ -1,11 +1,11 @@
 """
 A base representation of an instance of Galaxy
 """
-import urlparse
 from bioblend.galaxy.client import Client
 from bioblend.galaxy import (libraries, histories, workflows, datasets, users,
                              genomes, tools, toolshed, config, visual, quotas,
-                             groups, datatypes, jobs, forms, ftpfiles)
+                             groups, datatypes, jobs, forms, ftpfiles, folders,
+                             roles, tool_data)
 from bioblend.galaxyclient import GalaxyClient
 
 
@@ -27,7 +27,6 @@ class GalaxyInstance(GalaxyClient):
             gi = galaxy.GalaxyInstance(url='http://127.0.0.1:8000', key='your_api_key')
 
             hl = gi.histories.get_histories()
-            print "List of histories:", hl
 
         :type url: string
         :param url: A FQDN or IP for a given instance of Galaxy. For example:
@@ -48,15 +47,7 @@ class GalaxyInstance(GalaxyClient):
                          e-mail address. Ignored if key is supplied directly.
 
         """
-        # Make sure the url scheme is defined (otherwise requests will not work)
-        if not urlparse.urlparse(url).scheme:
-            url = "http://" + url
-        # All of Galaxy's API's are rooted at <url>/api so make that the base url
-        self.base_url = url
-        self.url = urlparse.urljoin(url, 'api')
-        self._init_auth(key, email, password)
-        self.json_headers = {'Content-Type': 'application/json'}
-        self.verify = False  # Should SSL verification be done
+        super(GalaxyInstance, self).__init__(url, key, email, password)
         self.libraries = libraries.LibraryClient(self)
         self.histories = histories.HistoryClient(self)
         self.workflows = workflows.WorkflowClient(self)
@@ -69,10 +60,13 @@ class GalaxyInstance(GalaxyClient):
         self.visual = visual.VisualClient(self)
         self.quotas = quotas.QuotaClient(self)
         self.groups = groups.GroupsClient(self)
+        self.roles = roles.RolesClient(self)
         self.datatypes = datatypes.DatatypesClient(self)
         self.jobs = jobs.JobsClient(self)
         self.forms = forms.FormsClient(self)
         self.ftpfiles = ftpfiles.FTPFilesClient(self)
+        self.tool_data = tool_data.ToolDataClient(self)
+        self.folders = folders.FoldersClient(self)
 
     @property
     def max_get_attempts(self):

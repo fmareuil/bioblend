@@ -39,7 +39,7 @@ class DatatypesClient(Client):
         if upload_only:
             params['upload_only'] = True
 
-        return Client._get(self, params=params).json()
+        return Client._get(self, params=params)
     
     def get_edam_formats(self):
         """
@@ -68,7 +68,7 @@ class DatatypesClient(Client):
         url = self.gi._make_url(self)
         url = '/'.join([url, "edam_formats"])
         
-        return Client._get(self, url=url).json()
+        return Client._get(self, url=url)
 
     def get_sniffers(self):
         """
@@ -95,4 +95,4 @@ class DatatypesClient(Client):
         url = self.gi._make_url(self)
         url = '/'.join([url, "sniffers"])
 
-        return Client._get(self, url=url).json()
+        return Client._get(self, url=url)

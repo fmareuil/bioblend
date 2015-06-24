@@ -5,6 +5,7 @@ from bioblend.galaxy.client import Client
 import json
 import os
 
+
 class WorkflowClient(Client):
     def __init__(self, galaxy_instance):
         self.module = 'workflows'
@@ -16,15 +17,20 @@ class WorkflowClient(Client):
         or ``workflow_id``. Provide only one argument, ``name`` or ``workflow_id``,
         but not both.
 
-        If ``name`` is set and multiple names match the given name, all the
-        workflows matching the argument will be returned.
+        :type workflow_id: str
+        :param workflow_id: Encoded workflow ID (incompatible with ``name``)
 
-        If ``deleted`` is set to ``True``, return workflows that have been deleted.
+        :type name: str
+        :param name: Filter by name of workflow (incompatible with
+          ``workflow_id``). If multiple names match the given name, all the
+          workflows matching the argument will be returned.
 
-        If ``published`` is set to ``True``, return published workflows.
+        :type deleted: bool
+        :param deleted: this parameter is deprecated and ignored, it will be
+          removed in BioBlend 0.6
 
-        Return a list of JSON formatted dicts each containing basic information
-        about a workflow.
+        :type published: bool
+        :param published: if ``True``, return also published workflows
 
         :rtype: list
         :return: A list of workflow dicts.
@@ -37,10 +43,10 @@ class WorkflowClient(Client):
         """
         if workflow_id is not None and name is not None:
             raise ValueError('Provide only one argument between name or workflow_id, but not both')
-        kwargs = {'deleted': deleted}
+        kwargs = {}
         if published:
             kwargs['params'] = {'show_published': 'True'}
-        workflows = Client._get(self, **kwargs).json()
+        workflows = Client._get(self, **kwargs)
         if workflow_id is not None:
             workflow = next((_ for _ in workflows if _['id'] == workflow_id), None)
             workflows = [workflow] if workflow is not None else []
@@ -52,7 +58,7 @@ class WorkflowClient(Client):
         """
         Display information needed to run a workflow
 
-        :type workflow_id: string
+        :type workflow_id: str
         :param workflow_id: Encoded workflow ID
 
         :rtype: list
@@ -65,14 +71,23 @@ class WorkflowClient(Client):
                    u'url': u'/api/workflows/92c56938c2f9b315'}
 
         """
-        return Client._get(self, id=workflow_id).json()
+        return Client._get(self, id=workflow_id)
 
     def get_workflow_inputs(self, workflow_id, label):
         """
         Get a list of workflow input IDs that match the given label.
         If no input matches the given label, an empty list is returned.
+
+        :type workflow_id: str
+        :param workflow_id: Encoded workflow ID
+
+        :type label: str
+        :param label: label to filter workflow inputs on
+
+        :rtype: list
+        :return: list of workflow inputs matching the label query
         """
-        wf = Client._get(self, id=workflow_id).json()
+        wf = Client._get(self, id=workflow_id)
         inputs = wf['inputs']
         return [id for id in inputs if inputs[id]['label'] == label]
 
@@ -80,6 +95,9 @@ class WorkflowClient(Client):
         """
         Imports a new workflow given a json representation of a previously exported
         workflow.
+
+        :type workflow_json: str
+        :param workflow_json: JSON string representing the workflow to be imported
         """
         payload = {}
         payload['workflow'] = workflow_json
@@ -92,8 +110,11 @@ class WorkflowClient(Client):
         """
         Imports a new workflow given the path to a file containing a previously
         exported workflow.
+
+        :type file_local_path: str
+        :param file_local_path: File to upload to the server for new workflow
         """
-        with open(file_local_path, 'rb') as fp:
+        with open(file_local_path, 'r') as fp:
             workflow_json = json.load(fp)
 
         return self.import_workflow_json(workflow_json)
@@ -102,10 +123,10 @@ class WorkflowClient(Client):
         """
         Imports a new workflow from the shared published workflows
 
-        :type workflow_id: string
+        :type workflow_id: str
         :param workflow_id: Encoded workflow ID
 
-        :rtype: Dict
+        :rtype: dict
         :return: A description of the workflow.
                  For example::
 
@@ -125,33 +146,35 @@ class WorkflowClient(Client):
 
     def export_workflow_json(self, workflow_id):
         """
-        Exports a workflow in json format
+        Exports a workflow
 
-        :type workflow_id: string
+        :type workflow_id: str
         :param workflow_id: Encoded workflow ID
+
+        :rtype: dict
+        :return: Dict representing the workflow requested
         """
         url = self.gi._make_url(self)
         url = '/'.join([url, "download"])
         url = '/'.join([url, workflow_id])
-        return Client._get(self, url=url).json()
+        return Client._get(self, url=url)
 
     def export_workflow_to_local_path(self, workflow_id, file_local_path, use_default_filename=True):
         """
         Exports a workflow in json format to a given local path.
 
-        :type workflow_id: string
+        :type workflow_id: str
         :param workflow_id: Encoded workflow ID
 
-        :type file_local_path: string
+        :type file_local_path: str
         :param file_local_path: Local path to which the exported file will be saved.
                                 (Should not contain filename if use_default_name=True)
 
-        :type use_default_name: boolean
-        :param use_default_name: If the use_default_name parameter is True, the exported
-                                 file will be saved as file_local_path/Galaxy-Workflow-%s.ga,
-                                 where %s is the workflow name.
-                                 If use_default_name is False, file_local_path is assumed to
-                                 contain the full file path including filename.
+        :type use_default_filename: bool
+        :param use_default_filename: If the use_default_name parameter is True, the exported
+          file will be saved as file_local_path/Galaxy-Workflow-%s.ga, where %s
+          is the workflow name. If use_default_name is False, file_local_path
+          is assumed to contain the full file path including filename.
         """
         workflow_json = self.export_workflow_json(workflow_id)
 
@@ -159,18 +182,19 @@ class WorkflowClient(Client):
             filename = 'Galaxy-Workflow-%s.ga' % workflow_json['name']
             file_local_path = os.path.join(file_local_path, filename)
 
-        with open(file_local_path, 'wb') as fp:
+        with open(file_local_path, 'w') as fp:
             json.dump(workflow_json, fp)
 
-    def run_workflow(self, workflow_id, dataset_map=None, params=None, history_id=None, history_name=None,
-            import_inputs_to_history=False, replacement_params=None):
+    def run_workflow(self, workflow_id, dataset_map=None, params=None,
+                     history_id=None, history_name=None,
+                     import_inputs_to_history=False, replacement_params=None):
         """
         Run the workflow identified by ``workflow_id``
 
-        :type workflow_id: string
+        :type workflow_id: str
         :param workflow_id: Encoded workflow ID
 
-        :type dataset_map: string or dict
+        :type dataset_map: str or dict
         :param dataset_map: A mapping of workflow inputs to datasets. The datasets
                             source can be a LibraryDatasetDatasetAssociation (``ldda``),
                             LibraryDataset (``ld``), or HistoryDatasetAssociation (``hda``).
@@ -178,19 +202,21 @@ class WorkflowClient(Client):
                             ``{'<input>': {'id': <encoded dataset ID>, 'src': '[ldda, ld, hda]'}}``
                             (e.g. ``{'23': {'id': '29beef4fadeed09f', 'src': 'ld'}}``)
 
-        :type params: string or dict
+        :type params: str or dict
         :param params: A mapping of tool parameters that are non-datasets parameters. The map must be in the
                          following format:
                          ``{'blastn': {'param': 'evalue', 'value': '1e-06'}}``
 
-        :type history_id: string
-        :param history_id: The encoded history ID where to store the workflow output.
-                           ``history_id`` OR ``history_name`` should be provided but not both!
+        :type history_id: str
+        :param history_id: The encoded history ID where to store the workflow
+          output. Alternatively, ``history_name`` may be specified to create a
+          new history.
 
-        :type history_name: string
-        :param history_name: Create a new history with the given name to store the
-                             workflow output. ``history_id`` OR ``history_name``
-                             should be provided but not both!
+        :type history_name: str
+        :param history_name: Create a new history with the given name to store
+          the workflow output. If both ``history_id`` and ``history_name`` are
+          provided, ``history_name`` is ignored. If neither is specified, a new
+          'Unnamed history' is created.
 
         :type import_inputs_to_history: bool
         :param import_inputs_to_history: If ``True``, used workflow inputs will be imported
@@ -239,8 +265,6 @@ class WorkflowClient(Client):
             payload['history'] = 'hist_id={0}'.format(history_id)
         elif history_name:
             payload['history'] = history_name
-        else:
-            print "Must provide history_id or history_name argument"
         if import_inputs_to_history is False:
             payload['no_add_to_history'] = True
         return Client._post(self, payload)
@@ -248,6 +272,9 @@ class WorkflowClient(Client):
     def delete_workflow(self, workflow_id):
         """
         Delete a workflow identified by `workflow_id`.
+
+        :type workflow_id: str
+        :param workflow_id: Encoded workflow ID
 
         .. warning::
             Deleting a workflow is irreversible - all workflow data

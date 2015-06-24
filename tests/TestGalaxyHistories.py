@@ -1,7 +1,9 @@
 """
 """
-import os, tempfile, shutil, tarfile
-import time
+import os
+import shutil
+import tarfile
+import tempfile
 
 import GalaxyTestBase
 import test_util
@@ -62,12 +64,20 @@ class TestGalaxyHistories(GalaxyTestBase.GalaxyTestBase):
         self.assertEqual(self.history['name'], history_data['name'])
         self.assertEqual('new', history_data['state'])
 
+    @test_util.skip_unless_galaxy('release_14.04')
+    def test_create_history_tag(self):
+        new_tag = 'tag1'
+        self.gi.histories.create_history_tag(self.history['id'], new_tag)
+        updated_hist = self.gi.histories.show_history(self.history['id'])
+        self.assertEqual(self.history['id'], updated_hist['id'])
+        self.assertIn(new_tag, updated_hist['tags'])
+
     def test_show_dataset(self):
         history_id = self.history["id"]
         dataset1_id = self._test_dataset(history_id)
         dataset = self.gi.histories.show_dataset(history_id, dataset1_id)
         for key in ["name", "hid", "id", "deleted", "history_id", "visible"]:
-            assert key in dataset
+            self.assertIn(key, dataset)
         self.assertEqual(dataset["history_id"], history_id)
         self.assertEqual(dataset["hid"], 1)
         self.assertEqual(dataset["id"], dataset1_id)
@@ -78,22 +88,23 @@ class TestGalaxyHistories(GalaxyTestBase.GalaxyTestBase):
         history_id = self.history["id"]
         dataset1_id = self._test_dataset(history_id)
         prov = self.gi.histories.show_dataset_provenance(history_id, dataset1_id)
-        for key in ["job_id", "id", "stdout", "stderr", "parameters", "tool_id"]:
-            assert key in prov
+        # 'job_id' key was added in Galaxy release_14.06
+        for key in ["id", "stdout", "stderr", "parameters", "tool_id"]:
+            self.assertIn(key, prov)
 
     def test_delete_dataset(self):
         history_id = self.history["id"]
         dataset1_id = self._test_dataset(history_id)
         self.gi.histories.delete_dataset(history_id, dataset1_id)
         dataset = self.gi.histories.show_dataset(history_id, dataset1_id)
-        self.assertEqual(dataset["deleted"], True)
+        self.assertTrue(dataset["deleted"])
 
     def test_update_dataset(self):
         history_id = self.history["id"]
         dataset1_id = self._test_dataset(history_id)
         self.gi.histories.update_dataset(history_id, dataset1_id, visible=False)
         dataset = self.gi.histories.show_dataset(history_id, dataset1_id)
-        self.assertEqual(dataset["visible"], False)
+        self.assertFalse(dataset["visible"])
 
     def test_upload_dataset_from_library(self):
         pass
@@ -101,12 +112,8 @@ class TestGalaxyHistories(GalaxyTestBase.GalaxyTestBase):
     def test_download_dataset(self):
         history_id = self.history["id"]
         dataset1_id = self._test_dataset(history_id)
-        self._wait_for_history()
-        with tempfile.NamedTemporaryFile(prefix='bioblend_test_') as f:
-            self.gi.histories.download_dataset(history_id, dataset1_id, file_path=f.name, use_default_filename=False)
-            f.flush()
-            assert open(f.name, "r").read() == "1\t2\t3\n"
-   
+        self._wait_and_verify_dataset(history_id, dataset1_id, b"1\t2\t3\n")
+
     def test_delete_history(self):
         result = self.gi.histories.delete_history(self.history['id'])
         self.assertTrue(result['deleted'])
@@ -136,39 +143,17 @@ class TestGalaxyHistories(GalaxyTestBase.GalaxyTestBase):
     def test_download_history(self):
         jeha_id = self.gi.histories.export_history(
             self.history['id'], wait=True
-            )
+        )
         self.assertTrue(jeha_id)
         tempdir = tempfile.mkdtemp(prefix='bioblend_test_')
         temp_fn = os.path.join(tempdir, 'export.tar.gz')
         try:
-            with open(temp_fn, 'w') as fo:
-                self.gi.histories.download_history(
-                    self.history['id'], jeha_id, fo
-                    )
+            with open(temp_fn, 'wb') as fo:
+                self.gi.histories.download_history(self.history['id'], jeha_id,
+                                                   fo)
             self.assertTrue(tarfile.is_tarfile(temp_fn))
         finally:
             shutil.rmtree(tempdir)
 
     def tearDown(self):
-        self.history = self.gi.histories.delete_history(self.history['id'], purge=True)
-
-    def _wait_for_history(self, timeout_seconds=15):
-        for _ in range(timeout_seconds):
-            state = self._history_data()['state']
-            if self._state_ready(state):
-                return
-            time.sleep(1)
-        return self._state_ready( state, error_msg="History in error state." )
-
-    def _history_data(self, history_id=None):
-        if history_id is None:
-            history_id = self.history['id']
-        history_data = self.gi.histories.show_history(history_id)
-        return history_data
-
-    def _state_ready(self, state_str):
-        if state_str == 'ok':
-            return True
-        elif state_str == 'error':
-            raise Exception("History in error state")
-        return False
+        self.gi.histories.delete_history(self.history['id'], purge=True)

@@ -6,14 +6,36 @@ should not use it directly.
 A base representation of an instance
 """
 import base64
-import urllib2
-import poster
-import requests
 import json
-from galaxy.client import ConnectionError
+
+import requests
+from requests_toolbelt import MultipartEncoder
+import six
+from six.moves.urllib.parse import urljoin, urlparse
+
+from .galaxy.client import ConnectionError
 
 
 class GalaxyClient(object):
+
+    def __init__(self, url, key=None, email=None, password=None):
+        # Make sure the url scheme is defined (otherwise requests will not work)
+        if not urlparse(url).scheme:
+            url = "http://" + url
+        # All of Galaxy's and ToolShed's API's are rooted at <url>/api so make that the url
+        self.base_url = url
+        self.url = urljoin(url, 'api')
+        # If key has been supplied, use it; otherwise just set email and
+        # password and grab user's key before first request.
+        if key:
+            self._key = key
+        else:
+            self._key = None
+            self.email = email
+            self.password = password
+        self.json_headers = {'Content-Type': 'application/json'}
+        self.verify = True  # Should SSL verification be done
+
     def _make_url(self, module, module_id=None, deleted=False, contents=False):
         """
         Compose a URL based on the provided arguments.
@@ -86,22 +108,27 @@ class GalaxyClient(object):
         else:
             params = self.default_params
 
+        # Compute data, headers, params arguments for request.post,
+        # leveraging the requests-toolbelt library if any files have
+        # been attached.
         if files_attached:
-            payload.update(params)  # merge query string values into request body instead
-            poster.streaminghttp.register_openers()
-            datagen, headers = poster.encode.multipart_encode(payload)
-            request = urllib2.Request(url, datagen, headers)
-            fp = urllib2.urlopen(request)
-            return json.loads(fp.read())
+            payload.update(params)
+            payload = MultipartEncoder(fields=payload)
+            headers = self.json_headers.copy()
+            headers['Content-Type'] = payload.content_type
+            post_params = {}
         else:
             payload = json.dumps(payload)
-            r = requests.post(url, data=payload, headers=self.json_headers,
-                              verify=self.verify, params=params)
-            if r.status_code == 200:
-                return r.json()
-            # @see self.body for HTTP response body
-            raise ConnectionError("Unexpected response from galaxy: %s" %
-                                  r.status_code, body=r.text)
+            headers = self.json_headers
+            post_params = params
+
+        r = requests.post(url, data=payload, headers=headers,
+                          verify=self.verify, params=post_params)
+        if r.status_code == 200:
+            return r.json()
+        # @see self.body for HTTP response body
+        raise ConnectionError("Unexpected response from galaxy: %s" %
+                              r.status_code, body=r.text)
 
     def make_delete_request(self, url, payload=None, params=None):
         """
@@ -134,7 +161,7 @@ class GalaxyClient(object):
             params = self.default_params
 
         payload = json.dumps(payload)
-        r = requests.put(url, data=payload, params=params)
+        r = requests.put(url, verify=self.verify, data=payload, params=params)
         return r
 
     @property
@@ -151,21 +178,11 @@ class GalaxyClient(object):
             if r.status_code != 200:
                 raise Exception("Failed to authenticate user.")
             response = r.json()
-            if isinstance(response, basestring) or isinstance(response, unicode):
-                # bug in tool shed
+            if isinstance(response, (six.string_types, six.text_type)):
+                # bug in Tool Shed
                 response = json.loads(response)
             self._key = response["api_key"]
         return self._key
-
-    def _init_auth(self, key, email, password):
-        # If key supplied use it, otherwise just set email and password and
-        # grab users key before first request.
-        if key:
-            self._key = key
-        else:
-            self._key = None
-            self.email = email
-            self.password = password
 
     @property
     def default_params(self):

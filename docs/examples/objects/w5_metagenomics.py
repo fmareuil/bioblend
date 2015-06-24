@@ -1,8 +1,11 @@
-import sys, os
+from __future__ import print_function
+import os
+import sys
+
 from bioblend.galaxy.objects import GalaxyInstance
 from common import get_one
 
-URL = 'http://orione.crs4.it'
+URL = 'https://orione.crs4.it'
 API_KEY = os.getenv('GALAXY_API_KEY', 'YOUR_API_KEY')
 if API_KEY == 'YOUR_API_KEY':
     sys.exit('API_KEY not set, see the README.txt file')
@@ -51,5 +54,5 @@ params[tool_id]['db_opts']['database'] = '16SMicrobial-20131106'
 outputs, out_hist = iw.run(input_map, h, params=params)
 assert out_hist.name == history_name
 
-print 'Running workflow: %s [%s]' % (iw.name, iw.id)
-print 'Output history: %s [%s]' % (out_hist.name, out_hist.id)
+print('Running workflow: %s [%s]' % (iw.name, iw.id))
+print('Output history: %s [%s]' % (out_hist.name, out_hist.id))

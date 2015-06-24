@@ -2,6 +2,7 @@
 Contains possible interactions with the Galaxy Data Libraries
 """
 from bioblend.galaxy.client import Client
+from bioblend.util import attach_file
 
 
 class LibraryClient(Client):
@@ -14,6 +15,18 @@ class LibraryClient(Client):
         """
         Create a data library with the properties defined in the arguments.
         Return a list of JSON dicts, looking like so::
+
+        :type name: str
+        :param name: Name of the new data library
+
+        :type description: str
+        :param description: Optional data library description
+
+        :type synopsis: str
+        :param synopsis: Optional data library synopsis
+
+        :rtype: list
+        :return: List of dicts describing created library
 
             [{"id": "f740ab636b360a70",
               "name": "Library from bioblend",
@@ -29,7 +42,10 @@ class LibraryClient(Client):
 
     def delete_library(self, library_id):
         """
-        Delete a data library identified by `library_id`.
+        Delete a data library.
+
+        :type library_id: str
+        :param library_id: Encoded data library ID identifying the library to be deleted
 
         .. warning::
             Deleting a data library is irreversible - all of the data from
@@ -39,30 +55,31 @@ class LibraryClient(Client):
         return Client._delete(self, payload, id=library_id)
 
     def __show_item(self, library_id, item_id):
+        """
+        Get details about a given library item.
+        """
         url = self.gi._make_url(self, library_id, contents=True)
         url = '/'.join([url, item_id])
-        return Client._get(self, url=url).json()
+        return Client._get(self, url=url)
 
     def delete_library_dataset(self, library_id, dataset_id, purged=False):
         """
-        Deleta a library dataset in a data library
+        Delete a library dataset in a data library.
 
-        :type library_id: string
-        :param library_id: Encoded Library id where dataset is found in
+        :type library_id: str
+        :param library_id: library id where dataset is found in
 
-        :type dataset_id: string
-        :param dataset_id: Encoded dataset id to be deleted
+        :type dataset_id: str
+        :param dataset_id: id of the dataset to be deleted
 
-        :type purged: Boolean
+        :type purged: bool
         :param purged: Indicate that the dataset should be purged (permanently deleted)
 
         :rtype: dict
-        :return: A dictionary containing the datset id and whether the dataset has been deleted
+        :return: A dictionary containing the dataset id and whether the dataset has been deleted
                  For example::
 
                  {u'deleted': True, u'id': u'60e680a037f41974'}
-
-
         """
 
         url = self.gi._make_url(self, library_id, contents=True)
@@ -74,6 +91,15 @@ class LibraryClient(Client):
         """
         Get details about a given library dataset. The required ``library_id``
         can be obtained from the datasets's library content details.
+
+        :type library_id: str
+        :param library_id: library id where dataset is found in
+
+        :type dataset_id: str
+        :param dataset_id: id of the dataset to be inspected
+
+        :rtype: dict
+        :return: A dictionary containing information about the dataset in the library
         """
         return self.__show_item(library_id, dataset_id)
 
@@ -81,22 +107,52 @@ class LibraryClient(Client):
         """
         Get details about a given folder. The required ``folder_id``
         can be obtained from the folder's library content details.
+
+        :type library_id: str
+        :param library_id: library id to inspect folders in
+
+        :type folder_id: str
+        :param folder_id: id of the folder to be inspected
         """
         return self.__show_item(library_id, folder_id)
 
+    def _get_root_folder_id(self, library_id):
+        """
+        Find the root folder (i.e. '/') of a library.
+
+        :type library_id: str
+        :param library_id: library id to find root of
+        """
+        l = self.show_library(library_id=library_id)
+        if 'root_folder_id' in l:
+            return l['root_folder_id']
+        # Galaxy previous to release_13.04 does not have root_folder_id in
+        # library dictionary, so resort to find the folder with name '/'
+        library_contents = self.show_library(library_id=library_id, contents=True)
+        for f in library_contents:
+            if f['name'] == '/':
+                return f['id']
+
     def create_folder(self, library_id, folder_name, description=None, base_folder_id=None):
         """
-        Create a folder in the given library and the base folder. If
-        ``base_folder_id`` is not provided, the new folder will be created
-        in the root folder.
+        Create a folder in a library.
+
+        :type library_id: str
+        :param library_id: library id to use
+
+        :type folder_name: str
+        :param folder_name: name of the new folder in the data library
+
+        :type description: str
+        :param description: description of the new folder in the data library
+
+        :type base_folder_id: str
+        :param base_folder_id: id of the folder where to create the new folder.
+          If not provided, the root folder will be used
         """
         # Get root folder ID if no ID was provided
         if base_folder_id is None:
-            folders = self.show_library(library_id=library_id, contents=True)
-            for f in folders:
-                if f['name'] == '/':
-                    base_folder_id = f['id']
-                    break
+            base_folder_id = self._get_root_folder_id(library_id)
         # Compose the payload
         payload = {}
         payload['name'] = folder_name
@@ -106,23 +162,26 @@ class LibraryClient(Client):
             payload['description'] = description
         return Client._post(self, payload, id=library_id, contents=True)
 
-    def get_folders(self, library_id, folder_id=None, name=None, deleted=False):
+    def get_folders(self, library_id, folder_id=None, name=None):
         """
         Get all the folders or filter specific one(s) via the provided ``name``
         or ``folder_id`` in data library with id ``library_id``. Provide only one
         argument: ``name`` or ``folder_id``, but not both.
 
-        For ``name`` specify the full path of the folder starting from the
-        library's root folder, e.g. ``/subfolder/subsubfolder``.
+        :type folder_id: str
+        :param folder_id: filter for folder by folder id
 
-        If ``deleted`` is set to ``True``, return folders that have been deleted.
+        :type name: str
+        :param name: filter for folder by name. For ``name`` specify the full
+                     path of the folder starting from the library's root
+                     folder, e.g. ``/subfolder/subsubfolder``.
 
-        Return a list of JSON formatted dicts each containing basic information
-        about a folder.
+        :rtype: dict
+        :return: list of dicts each containing basic information about a folder.
         """
         if folder_id is not None and name is not None:
             raise ValueError('Provide only one argument between name or folder_id, but not both')
-        library_contents = Client._get(self, id=library_id, contents=True).json()
+        library_contents = self.show_library(library_id=library_id, contents=True)
         if folder_id is not None:
             folder = next((_ for _ in library_contents if _['type'] == 'folder' and _['id'] == folder_id), None)
             folders = [folder] if folder is not None else []
@@ -137,15 +196,24 @@ class LibraryClient(Client):
         Get all the libraries or filter for specific one(s) via the provided name or ID.
         Provide only one argument: ``name`` or ``library_id``, but not both.
 
-        If ``name`` is set and multiple names match the given name, all the
-        libraries matching the argument will be returned.
+        :type library_id: str
+        :param library_id: filter for library by library id
 
-        Return a list of JSON formatted dicts each containing basic information
-        about a library.
+        :type name: str
+        :param name: If ``name`` is set and multiple names match the given
+                     name, all the libraries matching the argument will be
+                     returned.
+
+        :type deleted: bool
+        :param deleted: If set to ``True``, return libraries that have been
+                        deleted.
+
+        :rtype: dict
+        :return: list of dicts each containing basic information about a library.
         """
         if library_id is not None and name is not None:
             raise ValueError('Provide only one argument between name or library_id, but not both')
-        libraries = Client._get(self, deleted=deleted).json()
+        libraries = Client._get(self, deleted=deleted)
         if library_id is not None:
             library = next((_ for _ in libraries if _['id'] == library_id), None)
             libraries = [library] if library is not None else []
@@ -157,29 +225,26 @@ class LibraryClient(Client):
         """
         Get information about a library.
 
-        If want to get contents of the library (rather than just the library details),
-        set ``contents`` to ``True``.
+        :type library_id: str
+        :param library_id: filter for library by library id
 
-        Return a list of JSON formatted dicts containing library details.
+        :type contents: bool
+        :param contents: True if want to get contents of the library (rather than just the library details).
+
+        :rtype: list
+        :return: a list of dicts containing library details.
         """
-        return Client._get(self, id=library_id, contents=contents).json()
+        return Client._get(self, id=library_id, contents=contents)
 
-    def _do_upload(self, **keywords):
+    def _do_upload(self, library_id, **keywords):
         """
         Set up the POST request and do the actual data upload to a data library.
         This method should not be called directly but instead refer to the methods
         specific for the desired type of data upload.
         """
-        # If folder_id was not provided in the arguments, find the root folder ID
-        if keywords.get('folder_id', None) is None:
-            folders = self.show_library(library_id=keywords['library_id'], contents=True)
-            for f in folders:
-                if f['name'] == '/':
-                    folder_id = f['id']
-                    break
-        else:
-            folder_id = keywords['folder_id']
-
+        folder_id = keywords.get('folder_id', None)
+        if folder_id is None:
+            folder_id = self._get_root_folder_id(library_id)
         files_attached = False
         # Compose the payload dict
         payload = {}
@@ -189,7 +254,7 @@ class LibraryClient(Client):
         payload['create_type'] = 'file'
         if keywords.get("roles", None):
             payload["roles"] = keywords["roles"]
-        if keywords.get("link_data_only", None):
+        if keywords.get("link_data_only", None) and keywords['link_data_only'] != 'copy_files':
             payload["link_data_only"] = 'link_to_files'
         # upload options
         if keywords.get('file_url', None) is not None:
@@ -203,88 +268,238 @@ class LibraryClient(Client):
             payload['server_dir'] = keywords['server_dir']
         elif keywords.get('file_local_path', None) is not None:
             payload['upload_option'] = 'upload_file'
-            payload['files_0|file_data'] = open(keywords['file_local_path'], 'rb')
+            payload['files_0|file_data'] = attach_file(keywords['file_local_path'])
             files_attached = True
         elif keywords.get("filesystem_paths", None) is not None:
             payload["upload_option"] = "upload_paths"
             payload["filesystem_paths"] = keywords["filesystem_paths"]
 
-        r = Client._post(self, payload, id=keywords['library_id'], contents=True,
-                         files_attached=files_attached)
-
-        if payload.get('files_0|file_data', None) is not None:
-            payload['files_0|file_data'].close()
-
-        return r
+        try:
+            return Client._post(self, payload, id=library_id, contents=True,
+                                files_attached=files_attached)
+        finally:
+            if payload.get('files_0|file_data', None) is not None:
+                payload['files_0|file_data'].close()
 
     def upload_file_from_url(self, library_id, file_url, folder_id=None, file_type='auto', dbkey='?'):
         """
         Upload a file to a library from a URL.
-        If ``folder_id`` is not specified, the file will be uploaded to the root folder.
+
+        :type library_id: str
+        :param library_id: id of the library where to place the uploaded file
+
+        :type file_url: str
+        :param file_url: URL of the file to upload
+
+        :type folder_id: str
+        :param folder_id: id of the folder where to place the uploaded file.
+          If not provided, the root folder will be used
+
+        :type file_type: str
+        :param file_type: Galaxy file format name
+
+        :type dbkey: str
+        :param dbkey: Dbkey
         """
-        # TODO: Is there a better way of removing self from locals?
-        vars = locals().copy()
-        del vars['self']
-        return self._do_upload(**vars)
+        return self._do_upload(library_id, file_url=file_url,
+                               folder_id=folder_id, file_type=file_type,
+                               dbkey=dbkey)
 
     def upload_file_contents(self, library_id, pasted_content, folder_id=None, file_type='auto', dbkey='?'):
         """
-        Upload pasted_contents to a data library as a new file.
-        If ``folder_id`` is not specified, the file will be placed in the root folder.
+        Upload pasted_content to a data library as a new file.
+
+        :type library_id: str
+        :param library_id: id of the library where to place the uploaded file
+
+        :type pasted_content: str
+        :param pasted_content: Content to upload into the library
+
+        :type folder_id: str
+        :param folder_id: id of the folder where to place the uploaded file.
+          If not provided, the root folder will be used
+
+        :type file_type: str
+        :param file_type: Galaxy file format name
+
+        :type dbkey: str
+        :param dbkey: Dbkey
         """
-        vars = locals().copy()
-        del vars['self']
-        return self._do_upload(**vars)
+        return self._do_upload(library_id, pasted_content=pasted_content,
+                               folder_id=folder_id, file_type=file_type,
+                               dbkey=dbkey)
 
     def upload_file_from_local_path(self, library_id, file_local_path,
                                     folder_id=None, file_type='auto', dbkey='?'):
         """
-        Read local file contents from file_local_path and upload data to a library.
-        If ``folder_id`` is not specified, the file will be placed in the root folder.
+        Read local file contents from file_local_path and upload data to a
+        library.
+
+        :type library_id: str
+        :param library_id: id of the library where to place the uploaded file
+
+        :type file_local_path: str
+        :param file_local_path: path of local file to upload
+
+        :type folder_id: str
+        :param folder_id: id of the folder where to place the uploaded file.
+          If not provided, the root folder will be used
+
+        :type file_type: str
+        :param file_type: Galaxy file format name
+
+        :type dbkey: str
+        :param dbkey: Dbkey
         """
-        vars = locals().copy()
-        del vars['self']
-        return self._do_upload(**vars)
+        return self._do_upload(library_id, file_local_path=file_local_path,
+                               folder_id=folder_id, file_type=file_type,
+                               dbkey=dbkey)
 
     def upload_file_from_server(self, library_id, server_dir, folder_id=None,
                                 file_type='auto', dbkey='?', link_data_only=None,
                                 roles=""):
         """
-        Upload a file to a library from a path on the server where Galaxy is running.
-        If ``folder_id`` is not provided, the file will be placed in the root folder.
+        Upload all files in the specified subdirectory of the Galaxy library
+        import directory to a library.
 
-        Note that for this method to work, the Galaxy instance you're connecting to
-        must have the configuration option ``library_import_dir`` set in ``universe_wsgi.ini``.
-        The value of that configuration option should be a base directory from where
-        more specific directories can be specified as part of the ``server_dir`` argument.
-        All and only the files (ie, no folders) specified by the ``server_dir`` argument
-        will be uploaded to the data library.
+        .. note::
+          For this method to work, the Galaxy instance must have the
+          ``library_import_dir`` option configured in the ``config/galaxy.ini``
+          configuration file.
+
+        :type library_id: str
+        :param library_id: id of the library where to place the uploaded file
+
+        :type server_dir: str
+        :param server_dir: relative path of the subdirectory of
+          ``library_import_dir`` to upload. All and only the files (i.e. no
+          subdirectories) contained in the specified directory will be
+          uploaded.
+
+        :type folder_id: str
+        :param folder_id: id of the folder where to place the uploaded files.
+          If not provided, the root folder will be used
+
+        :type file_type: str
+        :param file_type: Galaxy file format name
+
+        :type dbkey: str
+        :param dbkey: Dbkey
+
+        :type link_data_only: str
+        :param link_data_only: either 'copy_files' (default) or
+          'link_to_files'. Setting to 'link_to_files' symlinks instead of
+          copying the files
+
+        :type roles: str
+        :param roles: ???
         """
-        vars = locals().copy()
-        del vars['self']
-        return self._do_upload(**vars)
+        return self._do_upload(library_id, server_dir=server_dir,
+                               folder_id=folder_id, file_type=file_type,
+                               dbkey=dbkey, link_data_only=link_data_only,
+                               roles=roles)
 
     def upload_from_galaxy_filesystem(self, library_id, filesystem_paths, folder_id=None,
                                       file_type="auto", dbkey="?", link_data_only=None,
                                       roles=""):
-        """Upload a file from filesystem paths already present on the Galaxy server.
-
-        Provides API access for the 'Upload files from filesystem paths' approach.
-
-        ``link_data_only`` -- whether to copy data into Galaxy. Setting to 'link_to_files'
-          symlinks data instead of copying
         """
-        vars = locals().copy()
-        del vars['self']
-        return self._do_upload(**vars)
+        Upload a set of files already present on the filesystem of the Galaxy
+        server to a library.
 
-    def set_library_permissions(self, library_id, access_in=None, modify_in=None,
-                                add_in=None, manage_in=None):
+        .. note::
+          For this method to work, the Galaxy instance must have the
+          ``allow_library_path_paste`` option set to ``True`` in the
+          ``config/galaxy.ini`` configuration file.
+
+        :type library_id: str
+        :param library_id: id of the library where to place the uploaded file
+
+        :type filesystem_paths: str
+        :param filesystem_paths: file paths on the Galaxy server to upload to
+          the library, one file per line
+
+        :type folder_id: str
+        :param folder_id: id of the folder where to place the uploaded files.
+          If not provided, the root folder will be used
+
+        :type file_type: str
+        :param file_type: Galaxy file format name
+
+        :type dbkey: str
+        :param dbkey: Dbkey
+
+        :type link_data_only: str
+        :param link_data_only: either 'copy_files' (default) or
+          'link_to_files'. Setting to 'link_to_files' symlinks instead of
+          copying the files
+
+        :type roles: str
+        :param roles: ???
         """
-        Sets the permissions for a library.  Note: it will override all
-        security for this library even if you leave out a permission type.
+        return self._do_upload(library_id, filesystem_paths=filesystem_paths,
+                               folder_id=folder_id, file_type=file_type,
+                               dbkey=dbkey, link_data_only=link_data_only,
+                               roles=roles)
 
-        access_in, modify_in, add_in, manage_in expect a list of user id's OR None
+    def copy_from_dataset(self, library_id, dataset_id, folder_id=None, message=''):
+        """
+        Copy a Galaxy dataset into a library.
+
+        :type library_id: str
+        :param library_id: id of the library where to place the uploaded file
+
+        :type dataset_id: str
+        :param dataset_id: id of the dataset to copy from
+
+        :type folder_id: str
+        :param folder_id: id of the folder where to place the uploaded files.
+          If not provided, the root folder will be used
+
+        :type message: str
+        :param message: message for copying action
+        """
+        if folder_id is None:
+            folder_id = self._get_root_folder_id(library_id)
+        payload = {}
+        payload['folder_id'] = folder_id
+        payload['create_type'] = 'file'
+        payload['from_hda_id'] = dataset_id
+        payload['ldda_message'] = message
+        return Client._post(self, payload, id=library_id, contents=True)
+
+    def get_library_permissions(self, library_id):
+        """
+        Get the permessions for a library.
+
+        :type library_id: str
+        :param library_id: id of the library
+
+        :rtype: dict
+        :return: dictionary with all applicable permissions' values
+        """
+        url = '/'.join([self.gi._make_url(self, library_id), 'permissions'])
+        return Client._get(self, url=url)
+
+    def set_library_permissions(self, library_id, access_in=None,
+                                modify_in=None, add_in=None, manage_in=None):
+        """
+        Set the permissions for a library.  Note: it will override all security
+        for this library even if you leave out a permission type.
+
+        :type library_id: str
+        :param library_id: id of the library
+
+        :type access_in: list
+        :param access_in: list of role ids
+
+        :type modify_in: list
+        :param modify_in: list of role ids
+
+        :type add_in: list
+        :param add_in: list of role ids
+
+        :type manage_in: list
+        :param manage_in: list of role ids
         """
 
         payload = {}
@@ -296,9 +511,5 @@ class LibraryClient(Client):
             payload['LIBRARY_ADD_in'] = add_in
         if manage_in:
             payload['LIBRARY_MANAGE_in'] = manage_in
-
-        # create the url
-        url = self.url
-        url = '/'.join([url, library_id, 'permissions'])
-
+        url = '/'.join([self.gi._make_url(self, library_id), 'permissions'])
         return Client._post(self, payload, url=url)

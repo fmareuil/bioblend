@@ -1,13 +1,17 @@
 """
 Contains possible interactions with the Galaxy Datasets
 """
-from bioblend.galaxy.client import Client
-import requests
+import logging
 import os
 import shlex
 import time
-import logging
-import urlparse
+
+import requests
+from six.moves import range
+from six.moves.urllib.parse import urljoin
+from six.moves.urllib.request import urlopen
+
+from bioblend.galaxy.client import Client
 
 log = logging.getLogger(__name__)
 
@@ -22,14 +26,20 @@ class DatasetClient(Client):
         Display information about and/or content of a dataset. This can be a
         history or a library dataset.
 
-        :type hda_ldda: string
+        :type dataset_id: str
+        :param dataset_id: Encoded dataset ID
+
+        :type deleted: bool
+        :param deleted: Whether to return results for a deleted dataset
+
+        :type hda_ldda: str
         :param hda_ldda: Whether to show a history dataset ('hda' - the default) or library
                          dataset ('ldda').
         """
         params = dict(
             hda_ldda=hda_ldda,
         )
-        return Client._get(self, id=dataset_id, deleted=deleted, params=params).json()
+        return Client._get(self, id=dataset_id, deleted=deleted, params=params)
     
     def download_dataset(self, dataset_id, file_path=None, use_default_filename=True,
                          wait_for_completion=False, maxwait=12000):
@@ -128,7 +138,7 @@ class DatasetClient(Client):
         assert maxwait > interval
         assert interval > 0
 
-        for time_left in xrange(maxwait, 0, -interval):
+        for time_left in range(maxwait, 0, -interval):
             if self._is_dataset_complete(dataset_id):
                 return
             log.warn("Waiting for dataset %s to complete. Will wait another %is" % (dataset_id, time_left))
@@ -136,6 +146,26 @@ class DatasetClient(Client):
         if raise_on_timeout:
             # noinspection PyUnboundLocalVariable
             raise DatasetTimeoutException("Waited too long for dataset to complete: %s" % dataset_id)
+
+    def show_stderr(self, dataset_id):
+        """
+        Display stderr output of a dataset.
+
+        :type dataset_id: str
+        :param dataset_id: Encoded dataset ID
+        """
+        res = urlopen(self.url[:-len("/api/datasets/") + 1] + "/datasets/" + dataset_id + "/stderr")
+        return res.read()
+
+    def show_stdout(self, dataset_id):
+        """
+        Display stdout output of a dataset.
+
+        :type dataset_id: str
+        :param dataset_id: Encoded dataset ID
+        """
+        res = urlopen(self.url[:-len("/api/datasets/") + 1] + "/datasets/" + dataset_id + "/stdout")
+        return res.read()
 
 
 class DatasetStateException(Exception):

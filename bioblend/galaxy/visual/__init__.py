@@ -31,14 +31,14 @@ class VisualClient(Client):
 
 
         """
-        results = Client._get(self).json()
+        results = Client._get(self)
         return results
 
     def show_visualization(self, visual_id):
         """
         Display information on a visualization
 
-        :type visual_id: string
+        :type visual_id: str
         :param visual_id: Encoded visualization ID
 
         :rtype: dict
@@ -58,4 +58,4 @@ class VisualClient(Client):
                    u'user_id': u'21e4aed91386ca8b'}
 
         """
-        return Client._get(self, id=visual_id).json()
+        return Client._get(self, id=visual_id)

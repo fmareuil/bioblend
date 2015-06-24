@@ -3,7 +3,6 @@ A base representation of an instance of Tool Shed
 """
 from bioblend.toolshed import (repositories)
 from bioblend.galaxyclient import GalaxyClient
-import urlparse
 
 
 class ToolShedInstance(GalaxyClient):
@@ -23,7 +22,6 @@ class ToolShedInstance(GalaxyClient):
             ts = toolshed.ToolShedInstance(url='http://testtoolshed.g2.bx.psu.edu')
 
             rl = ts.repositories.get_repositories()
-            print "List of repositories:", rl
 
         :type url: string
         :param url: A FQDN or IP for a given instance of ToolShed. For example:
@@ -33,13 +31,5 @@ class ToolShedInstance(GalaxyClient):
         :param key: If required, user's API key for the given instance of ToolShed,
                     obtained from the user preferences.
         """
-        # Make sure the url scheme is defined (otherwise requests will not work)
-        if not urlparse.urlparse(url).scheme:
-            url = "http://" + url
-        self.base_url = url
-        # All of ToolShed's API's are rooted at <url>/api so make that the url
-        self.url = urlparse.urljoin(url, 'api')
-        self._init_auth(key, email, password)
-        self.json_headers = {'Content-Type': 'application/json'}
-        self.verify = False  # Should SSL verification be done
+        super(ToolShedInstance, self).__init__(url, key, email, password)
         self.repositories = repositories.ToolShedClient(self)

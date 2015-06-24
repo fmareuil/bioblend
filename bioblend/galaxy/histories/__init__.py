@@ -1,17 +1,14 @@
 """
 Contains possible interactions with the Galaxy Histories
 """
-import bioblend
-from bioblend.galaxy.client import Client
-
 import os
 import re
-import shutil
-import shlex
-import urlparse
-import urllib2
-import shlex
 import time
+
+import six
+
+import bioblend
+from bioblend.galaxy.client import Client
 
 
 class HistoryClient(Client):
@@ -23,6 +20,12 @@ class HistoryClient(Client):
     def create_history(self, name=None):
         """
         Create a new history, optionally setting the ``name``.
+
+        :type name: str
+        :param name: Optional name for new history
+
+        :rtype: dict
+        :return: Dictionary containing information about newly created history
         """
         payload = {}
         if name is not None:
@@ -31,19 +34,27 @@ class HistoryClient(Client):
 
     def get_histories(self, history_id=None, name=None, deleted=False):
         """
-        Get all histories or filter the specific one(s) via the provided ``name``
-        or ``history_id``. Provide only one argument, ``name`` or ``history_id``,
-        but not both.
+        Get all histories or filter the specific one(s) via the provided
+        ``name`` or ``history_id``. Provide only one argument, ``name`` or
+        ``history_id``, but not both.
 
-        If ``deleted`` is set to ``True``, return histories that have been deleted.
+        If ``deleted`` is set to ``True``, return histories that have been
+        deleted.
 
-        Return a list of history element dicts. If more than one history
-        matches the given ``name``, return the list of all the histories with the
-        given name.
+        :type history_id: str
+        :param history_id: Encoded history ID to filter on
+
+        :type name: str
+        :param name: Name of history to filter on
+
+        :rtype: dict
+        :return: Return a list of history element dicts. If more than one
+                 history matches the given ``name``, return the list of all the
+                 histories with the given name.
         """
         if history_id is not None and name is not None:
             raise ValueError('Provide only one argument between name or history_id, but not both')
-        histories = Client._get(self, deleted=deleted).json()
+        histories = Client._get(self, deleted=deleted)
         if history_id is not None:
             history = next((_ for _ in histories if _['id'] == history_id), None)
             histories = [history] if history is not None else []
@@ -54,11 +65,29 @@ class HistoryClient(Client):
     def show_history(self, history_id, contents=False, deleted=None, visible=None, details=None, types=None):
         """
         Get details of a given history. By default, just get the history meta
-        information. If ``contents`` is set to ``True``, get the complete list of
-        datasets in the given history. ``deleted``, ``visible``, and ``details`` are
-        used only if ``contents`` is ``True`` and are used to modify the datasets returned
-        and their contents. Set ``details`` to 'all' to get more information
-        about each dataset.
+        information.
+
+        :type history_id: str
+        :param history_id: Encoded history ID to filter on
+
+        :type contents: bool
+        :param contents: When ``True``, the complete list of datasets in the
+          given history.
+
+        :type deleted: str
+        :param deleted: Used when contents=True, includes deleted datasets in
+          history dataset list
+
+        :type visible: str
+        :param visible: Used when contents=True, includes only visible datasets
+          in history dataset list
+
+        :type details: str
+        :param details: Used when contents=True, includes dataset details. Set
+          to 'all' for the most information
+
+        :type types: str
+        :param types: ???
         """
         params = {}
         if contents:
@@ -70,11 +99,17 @@ class HistoryClient(Client):
                 params['visible'] = visible
             if types is not None:
                 params['types'] = types.join(",")
-        return Client._get(self, id=history_id, contents=contents, params=params).json()
+        return Client._get(self, id=history_id, contents=contents, params=params)
 
     def delete_dataset(self, history_id, dataset_id):
         """
         Mark corresponding dataset as deleted.
+
+        :type history_id: str
+        :param history_id: Encoded history ID
+
+        :type dataset_id: str
+        :param dataset_id: Encoded dataset ID
         """
         url = self.gi._make_url(self, history_id, contents=True)
         # Append the dataset_id to the base history contents URL
@@ -84,6 +119,12 @@ class HistoryClient(Client):
     def delete_dataset_collection(self, history_id, dataset_collection_id):
         """
         Mark corresponding dataset collection as deleted.
+
+        :type history_id: str
+        :param history_id: Encoded history ID
+
+        :type dataset_collection_id: str
+        :param dataset_collection_id: Encoded dataset collection ID
         """
         url = self.gi._make_url(self, history_id, contents=True)
         # Append the dataset_id to the base history contents URL
@@ -92,31 +133,47 @@ class HistoryClient(Client):
 
     def show_dataset(self, history_id, dataset_id):
         """
-        Get details about a given history dataset. The required ``history_id``
-        can be obtained from the datasets's history content details.
+        Get details about a given history dataset.
+
+        :type history_id: str
+        :param history_id: Encoded history ID
+
+        :type dataset_id: str
+        :param dataset_id: Encoded dataset ID
         """
         url = self.gi._make_url(self, history_id, contents=True)
         # Append the dataset_id to the base history contents URL
         url = '/'.join([url, dataset_id])
-        return Client._get(self, url=url).json()
+        return Client._get(self, url=url)
 
     def show_dataset_collection(self, history_id, dataset_collection_id):
         """
         Get details about a given history dataset collection.
+
+        :type history_id: str
+        :param history_id: Encoded history ID
+
+        :type dataset_collection_id: str
+        :param dataset_collection_id: Encoded dataset collection ID
         """
         url = self.gi._make_url(self, history_id, contents=True)
         url = '/'.join([url, "dataset_collections", dataset_collection_id])
-        return Client._get(self, url=url).json()
+        return Client._get(self, url=url)
 
     def show_matching_datasets(self, history_id, name_filter=None):
         """
         Get dataset details for matching datasets within a history.
 
-        Only datasets whose name matches the ``name_filter`` regular
-        expression will be returned; use plain strings for exact
-        matches and None to match all datasets in the history.
+        :type history_id: str
+        :param history_id: Encoded history ID
+
+        :type name_filter: str
+        :param name_filter: Only datasets whose name matches the
+                            ``name_filter`` regular expression will be
+                            returned; use plain strings for exact matches and
+                            None to match all datasets in the history
         """
-        if isinstance(name_filter, basestring):
+        if isinstance(name_filter, six.string_types):
             name_filter = re.compile(name_filter + '$')
         return [self.show_dataset(history_id, h['id'])
                 for h in self.show_history(history_id, contents=True)
@@ -128,35 +185,49 @@ class HistoryClient(Client):
         ``tool_id``, ``stdout``, ``stderr``, ``parameters``, ``inputs``,
         etc...).
 
-        If ``follow`` is ``True``, recursively fetch dataset provenance
-        information for all inputs and their inputs, etc....
+        :type history_id: str
+        :param history_id: Encoded history ID
+
+        :type dataset_id: str
+        :param dataset_id: Encoded dataset ID
+
+        :type follow: bool
+        :param follow: If ``follow`` is ``True``, recursively fetch dataset
+                       provenance information for all inputs and their inputs,
+                       etc...
         """
         url = self.gi._make_url(self, history_id, contents=True)
         url = '/'.join([url, dataset_id, "provenance"])
-        return Client._get(self, url=url).json()
+        return Client._get(self, url=url)
 
     def update_history(self, history_id, name=None, annotation=None, **kwds):
         """
         Update history metadata information. Some of the attributes that can be
         modified are documented below.
 
-        :type history_id: string
+        :type history_id: str
         :param history_id: Encoded history ID
-        :type name: string
+
+        :type name: str
         :param name: Replace history name with the given string
-        :type annotation: string
+
+        :type annotation: str
         :param annotation: Replace history annotation with given string
-        :type deleted: boolean
+
+        :type deleted: bool
         :param deleted: Mark or unmark history as deleted
-        :type published: boolean
+
+        :type published: bool
         :param published: Mark or unmark history as published
-        :type importable: boolean
+
+        :type importable: bool
         :param importable: Mark or unmark history as importable
+
         :type tags: list
         :param tags: Replace history tags with the given list
 
-        :rtype: status_code (int)
-
+        :rtype: int
+        :return: status code
         """
         kwds['name'] = name
         kwds['annotation'] = annotation
@@ -167,18 +238,26 @@ class HistoryClient(Client):
         Update history dataset metadata. Some of the attributes that can be
         modified are documented below.
 
-        :type history_id: string
+        :type history_id: str
         :param history_id: Encoded history ID
-        :type name: string
+
+        :type dataset_id: str
+        :param dataset_id: Id of the dataset
+
+        :type name: str
         :param name: Replace history dataset name with the given string
-        :type annotation: string
+
+        :type annotation: str
         :param annotation: Replace history dataset annotation with given string
-        :type deleted: boolean
+
+        :type deleted: bool
         :param deleted: Mark or unmark history dataset as deleted
-        :type visible: boolean
+
+        :type visible: bool
         :param visible: Mark or unmark history dataset as visible
 
-        :rtype: status_code (int)
+        :rtype: int
+        :return: status code
         """
         url = self.gi._make_url(self, history_id, contents=True)
         # Append the dataset_id to the base history contents URL
@@ -190,16 +269,24 @@ class HistoryClient(Client):
         Update history dataset collection metadata. Some of the attributes that
         can be modified are documented below.
 
-        :type history_id: string
+        :type history_id: str
         :param history_id: Encoded history ID
-        :type name: string
-        :param name: Replace history dataset collection name with the given string
-        :type deleted: boolean
-        :param deleted: Mark or unmark history dataset collection as deleted.
-        :type visible: boolean
-        :param visible: Mark or unmark history dataset collection as visible.
 
-        :rtype: status_code (int)
+        :type dataset_collection_id: str
+        :param dataset_collection_id: Encoded dataset_collection ID
+
+        :type name: str
+        :param name: Replace history dataset collection name with the given
+          string
+
+        :type deleted: bool
+        :param deleted: Mark or unmark history dataset collection as deleted
+
+        :type visible: bool
+        :param visible: Mark or unmark history dataset collection as visible
+
+        :rtype: int
+        :return: status code
         """
         url = self.gi._make_url(self, history_id, contents=True)
         url = '/'.join([url, "dataset_collections", dataset_collection_id])
@@ -209,13 +296,14 @@ class HistoryClient(Client):
         """
         Create history tag
 
-        :type history_id: string
+        :type history_id: str
         :param history_id: Encoded history ID
-        :type tag: string
+
+        :type tag: str
         :param tag: Add tag to history
 
-        :rtype: json object
-        :return: Return json object
+        :rtype: dict
+        :return: A dictionary with information regarding the tag.
                  For example::
 
                  {'model_class':'HistoryTagAssociation', 'user_tname': 'NGS_PE_RUN', 'id': 'f792763bee8d277a', 'user_value': None}
@@ -236,6 +324,12 @@ class HistoryClient(Client):
         Upload a dataset into the history from a library. Requires the
         library dataset ID, which can be obtained from the library
         contents.
+
+        :type history_id: str
+        :param history_id: Encoded history ID
+
+        :type lib_dataset_id: str
+        :param lib_dataset_id: Encoded library dataset ID
         """
         payload = {
             'content': lib_dataset_id,
@@ -245,6 +339,15 @@ class HistoryClient(Client):
         return Client._post(self, payload, id=history_id, contents=True)
 
     def create_dataset_collection(self, history_id, collection_description):
+        """
+        Create a new dataset collection
+
+        :type history_id: str
+        :param history_id: Encoded history ID
+
+        :type collection_description: str
+        :param collection_description: a description of the dataset collection
+        """
         try:
             collection_description = collection_description.to_dict()
         except AttributeError:
@@ -257,88 +360,40 @@ class HistoryClient(Client):
         )
         return Client._post(self, payload, id=history_id, contents=True)
 
-    def download_dataset(self, history_id, dataset_id, file_path=None, use_default_filename=True,
-                         wait_for_completion=False, maxwait=12000, hda_ldda='hda'):
+    def download_dataset(self, history_id, dataset_id, file_path,
+                         use_default_filename=True, to_ext=None):
         """
-        Downloads the dataset identified by 'id'.
-        
-        :type history_id: string
-        :param history_id: Encoded history ID
-
-        :type dataset_id: string
-        :param dataset_id: Encoded Dataset ID
-
-        :type file_path: string
-        :param file_path: If the file_path argument is provided, the dataset will be streamed to disk
-                          at that path (Should not contain filename if use_default_name=True).
-                          If the file_path argument is not provided, the dataset content is loaded into memory
-                          and returned by the method (Memory consumption may be heavy as the entire file
-                          will be in memory).
-
-        :type use_default_filename: boolean
-        :param use_default_filename: If the use_default_filename parameter is True, the exported
-                                 file will be saved as file_path/%s,
-                                 where %s is the dataset name.
-                                 If use_default_name is False, file_path is assumed to
-                                 contain the full file path including filename.
-
-        :type wait_for_completion: boolean
-        :param wait_for_completion: If wait_for_completion is True, this call will block until the dataset is ready.
-                                    If the dataset state becomes invalid, a DatasetStateException will be thrown.
-
-        :type maxwait: float
-        :param maxwait: Time (in seconds) to wait for dataset to complete.
-                        If the dataset state is not complete within this time, a DatasetTimeoutException will be thrown.
-                        
-        :type hda_ldda: string
-        :param hda_ldda: Whether to show a history dataset ('hda' - the default) or library
-                         dataset ('ldda').
-
+        Download a ``dataset_id`` from history with ``history_id`` to a
+        file on the local file system, saving it to ``file_path``.
+        :type to_ext: str
+        :param to_ext: this parameter is deprecated and ignored, it will be
+          removed in BioBlend 0.6
+        Refer to ``bioblend.galaxy.dataset.DatasetClient.download_dataset()``
+        for the other available parameters.
         """
-        if wait_for_completion:
-            self._block_until_dataset_ready(dataset_id, maxwait=maxwait)
-        
-        dataset = self.show_dataset(history_id, dataset_id)
-        if not dataset['state'] == 'ok':
-            raise DatasetStateException("Dataset not ready. Dataset id: %s, current state: %s" % (dataset_id, dataset['state']))
-               
-        params = dict(
-        hda_ldda=hda_ldda,
-        )
-               
-        url = self.gi._make_url(self, history_id, contents=True)
-        url = '/'.join([url, dataset_id, 'display?to_ext=%s' % dataset['file_ext']])
-
-        r = Client._get(self, url=url)
-        if file_path is None:
-            return r.content
+        meta = self.show_dataset(history_id, dataset_id)
+        if use_default_filename:
+            file_local_path = os.path.join(file_path, meta['name'])
         else:
-            if use_default_filename:
-                try:
-                    # First try to get the filename from the response headers
-                    # We expect tokens 'filename' '=' to be followed by the quoted filename
-                    tokens = [x for x in shlex.shlex(r.headers['content-disposition'], posix=True)]
-                    header_filepath = tokens[tokens.index('filename') + 2]
-                    filename = os.path.basename(header_filepath)
-                except (ValueError, IndexError):
-                    # If the filename was not in the header, build a useable filename ourselves.
-                    try:
-                        filename = dataset['name'] + '.' + dataset['file_ext']
-                    except KeyError:
-                        filename = dataset['name']
-                file_local_path = os.path.join(file_path, filename)
-            else:
-                file_local_path = file_path
-            with open(file_local_path, 'wb') as fp:
-                fp.write(r.content)
+            file_local_path = file_path
+        return self.gi.datasets.download_dataset(dataset_id,
+                                                 file_path=file_local_path,
+                                                 use_default_filename=False)
 
     def delete_history(self, history_id, purge=False):
         """
         Delete a history.
 
-        If ``purge`` is set to ``True``, also purge the history. Note that for
-        the purge option to work, ``allow_user_dataset_purge`` option must be
-        set in the Galaxy's configuration file ``universe_wsgi.ini``
+        :type history_id: str
+        :param history_id: Encoded history ID
+
+        :type purge: bool
+        :param purge: if ``True``, also purge (permanently delete) the history
+
+        .. note::
+          For the purge option to work, the Galaxy instance must have the
+          ``allow_user_dataset_purge`` option set to ``True`` in the
+          ``config/galaxy.ini`` configuration file.
         """
         payload = {}
         if purge is True:
@@ -348,6 +403,9 @@ class HistoryClient(Client):
     def undelete_history(self, history_id):
         """
         Undelete a history
+
+        :type history_id: str
+        :param history_id: Encoded history ID
         """
         url = self.gi._make_url(self, history_id, deleted=True)
         # Append the 'undelete' action to the history URL
@@ -356,17 +414,23 @@ class HistoryClient(Client):
 
     def get_status(self, history_id):
         """
-        Returns the state of this history as a dictionary, with the following keys.
-        'state' = This is the current state of the history, such as ok, error, new etc.
-        'state_details' = Contains individual statistics for various dataset states.
-        'percent_complete' = The overall number of datasets processed to completion.
+        Returns the state of this history
+
+        :type history_id: str
+        :param history_id: Encoded history ID
+
+        :rtype: dict
+        :return: A dict documenting the current state of the history. Has the following keys:
+            'state' = This is the current state of the history, such as ok, error, new etc.
+            'state_details' = Contains individual statistics for various dataset states.
+            'percent_complete' = The overall number of datasets processed to completion.
         """
         state = {}
         history = self.show_history(history_id)
         state['state'] = history['state']
         if history.get('state_details') is not None:
             state['state_details'] = history['state_details']
-            total_complete = sum(history['state_details'].itervalues())
+            total_complete = sum(six.itervalues(history['state_details']))
             if total_complete > 0:
                 state['percent_complete'] = 100 * history['state_details']['ok'] / total_complete
             else:
@@ -387,7 +451,7 @@ class HistoryClient(Client):
         """
         url = self.gi._make_url(self, None)
         url = '/'.join([url, 'most_recently_used'])
-        return Client._get(self, url=url).json()
+        return Client._get(self, url=url)
 
     def export_history(self, history_id, gzip=True, include_hidden=False,
                        include_deleted=False, wait=False):
@@ -398,7 +462,7 @@ class HistoryClient(Client):
         :param history_id: history ID
 
         :type gzip: bool
-        :param gzip: create .tar.gz archive if :obj:`True`, else .tar
+        :param gzip: create .tar.gz archive if ``True``, else .tar
 
         :type include_hidden: bool
         :param include_hidden: whether to include hidden datasets
@@ -409,18 +473,18 @@ class HistoryClient(Client):
           in the export
 
         :type wait: bool
-        :param wait: if :obj:`True`, block until the export is ready;
-          else, return immediately
+        :param wait: if ``True``, block until the export is ready; else, return
+          immediately
 
         :rtype: str
-        :return: ``jeha_id`` of the export, or empty if ``wait`` is
-          :obj:`False` and the export is not ready.
+        :return: ``jeha_id`` of the export, or empty if ``wait`` is ``False``
+          and the export is not ready.
         """
         params = {
             'gzip': gzip,
             'include_hidden': include_hidden,
             'include_deleted': include_deleted,
-            }
+        }
         url = '%s/exports' % self.gi._make_url(self, history_id)
         while True:
             r = Client._put(self, {}, url=url, params=params)
@@ -448,14 +512,13 @@ class HistoryClient(Client):
           :meth:`export_history`)
 
         :type outf: file
-        :param outf: output file object, open for writing
+        :param outf: output file object, open for writing in binary mode
 
         :type chunk_size: int
         :param chunk_size: how many bytes at a time should be read into memory
         """
         url = '%s/exports/%s' % (
-            self.gi._make_url(self, module_id=history_id), jeha_id
-            )
+            self.gi._make_url(self, module_id=history_id), jeha_id)
         r = self.gi.make_get_request(url, stream=True)
         r.raise_for_status()
         for chunk in r.iter_content(chunk_size):

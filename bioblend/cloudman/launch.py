@@ -1,15 +1,16 @@
 """
 Setup and launch a CloudMan instance.
 """
-import yaml
 import datetime
-from httplib import HTTP
-from urlparse import urlparse
+import yaml
 
 import boto
 from boto.ec2.regioninfo import RegionInfo
 from boto.exception import EC2ResponseError, S3ResponseError
 from boto.s3.connection import OrdinaryCallingFormat, S3Connection, SubdomainCallingFormat
+import six
+from six.moves.http_client import HTTPConnection
+from six.moves.urllib.parse import urlparse
 
 import bioblend
 from bioblend.util import Bunch
@@ -17,6 +18,49 @@ from bioblend.util import Bunch
 
 # Comment the following line if no logging at the prompt is desired
 # bioblend.set_stream_logger(__name__)
+
+def instance_types(cloud_name='generic'):
+    """
+    Return a list of dictionaries containing details about the available
+    instance types for the given `cloud_name`.
+
+    :type cloud_name: string
+    :param cloud_name: A name of the cloud for which the list of instance
+                       types will be returned. Valid values are: `aws`,
+                       `nectar`, `generic`.
+
+    :rtype: list
+    :return: A list of dictionaries describing instance types. Each dict will
+             contain the following keys: `name`, `model`, and `description`.
+    """
+    instance_list = []
+    if cloud_name.lower() == 'aws':
+        instance_list.append({"model": "c3.large",
+                              "name": "Compute optimized Large",
+                              "description": "2 vCPU/4GB RAM"})
+        instance_list.append({"model": "c3.2xlarge",
+                              "name": "Compute optimized 2xLarge",
+                              "description": "8 vCPU/15GB RAM"})
+        instance_list.append({"model": "c3.8xlarge",
+                              "name": "Compute optimized 8xLarge",
+                              "description": "32 vCPU/60GB RAM"})
+    elif cloud_name.lower() in ['nectar', 'generic']:
+        instance_list.append({"model": "m1.small",
+                              "name": "Small",
+                              "description": "1 vCPU / 4GB RAM"})
+        instance_list.append({"model": "m1.medium",
+                              "name": "Medium",
+                              "description": "2 vCPU / 8GB RAM"})
+        instance_list.append({"model": "m1.large",
+                              "name": "Large",
+                              "description": "4 vCPU / 16GB RAM"})
+        instance_list.append({"model": "m1.xlarge",
+                              "name": "Extra Large",
+                              "description": "8 vCPU / 32GB RAM"})
+        instance_list.append({"model": "m1.xxlarge",
+                              "name": "Extra-extra Large",
+                              "description": "16 vCPU / 64GB RAM"})
+    return instance_list
 
 
 class CloudManLauncher(object):
@@ -117,7 +161,7 @@ class CloudManLauncher(object):
                                              ramdisk_id=ramdisk_id,
                                              placement=placement)
             ret['rs'] = rs
-        except EC2ResponseError, e:
+        except EC2ResponseError as e:
             bioblend.log.exception("Problem launching an instance.")
             ret['error'] = "Problem launching an instance."
             return ret
@@ -126,7 +170,7 @@ class CloudManLauncher(object):
                 bioblend.log.info("Launched an instance with ID %s" % rs.instances[0].id)
                 ret['instance_id'] = rs.instances[0].id
                 ret['instance_ip'] = rs.instances[0].ip_address
-            except Exception, e:
+            except Exception as e:
                 bioblend.log.exception("Problem with the launched instance object.")
                 ret['error'] = "Problem with the launched instance object: %s" % e
         return ret
@@ -263,18 +307,18 @@ class CloudManLauncher(object):
             if rs is not None:
                 inst_state = rs[0].instances[0].update()
                 public_ip = rs[0].instances[0].ip_address
+                state['public_ip'] = public_ip
                 if inst_state == 'running':
                     cm_url = "http://{dns}/cloud".format(dns=public_ip)
                     # Wait until the CloudMan URL is accessible to return the data
                     if self._checkURL(cm_url) is True:
-                        state['public_ip'] = public_ip
                         state['instance_state'] = inst_state
                         state['placement'] = rs[0].instances[0].placement
                     else:
                         state['instance_state'] = 'booting'
                 else:
                     state['instance_state'] = inst_state
-        except Exception, e:
+        except Exception as e:
             err = "Problem updating instance '%s' state: %s" % (instance_id, e)
             bioblend.log.error(err)
             state['error'] = err
@@ -394,7 +438,7 @@ class CloudManLauncher(object):
         excluded_fields = ['sg_name', 'image_id', 'instance_id', 'kp_name',
                            'cloud', 'cloud_type', 'public_dns', 'cidr_range',
                            'kp_material', 'placement']
-        for key, value in user_provided_data.iteritems():
+        for key, value in six.iteritems(user_provided_data):
             if key not in excluded_fields:
                 form_data[key] = value
         # If the following user data keys are empty, do not include them in the request user data
@@ -440,7 +484,12 @@ class CloudManLauncher(object):
         """
         Returns the placement of a volume (or None, if it cannot be determined)
         """
-        vol = self.ec2_conn.get_all_volumes(volume_ids=[vol_id])
+        try:
+            vol = self.ec2_conn.get_all_volumes(volume_ids=[vol_id])
+        except EC2ResponseError as ec2e:
+            bioblend.log.error("EC2ResponseError querying for volume {0}: {1}"
+                               .format(vol_id, ec2e))
+            vol = None
         if vol:
             return vol[0].zone
         else:
@@ -477,8 +526,11 @@ class CloudManLauncher(object):
                         # No need to continue to iterate through
                         # filesystems, if we found one with a volume.
                         break
-            except Exception:
-                bioblend.log.exception("Exception while finding placement.  This can indicate malformed instance data.  Or that this method is broken.")
+            except Exception as exc:
+                bioblend.log.exception("Exception while finding placement for "
+                                       "cluster '{0}'. This can indicate malformed "
+                                       "instance data. Or that this method is "
+                                       "broken: {1}".format(cluster_name, exc))
                 placement = None
         return placement
 
@@ -533,11 +585,11 @@ class CloudManLauncher(object):
         """
         try:
             p = urlparse(url)
-            h = HTTP(p[1])
+            h = HTTPConnection(p[1])
             h.putrequest('HEAD', p[2])
             h.endheaders()
-            r = h.getreply()
-            if r[0] == 200 or r[0] == 401:  # CloudMan UI is pwd protected so include 401
+            r = h.getresponse()
+            if r.status in (200, 401):  # CloudMan UI is pwd protected so include 401
                 return True
         except Exception:
             # No response or no good response
